@@ -24,4 +24,4 @@ jobs:
     - name: Build with Maven
       run: |
         mvn -B initialize
-        mvn -D package
+        mvn -B package

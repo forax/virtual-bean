@@ -22,6 +22,4 @@ jobs:
         java-version: '16'
         distribution: 'adopt'
     - name: Build with Maven
-      run: |
-        mvn -B initialize
-        mvn -B package
+      run: mvn -B package -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn

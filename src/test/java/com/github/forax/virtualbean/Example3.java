@@ -1,5 +1,7 @@
 package com.github.forax.virtualbean;
 
+import com.github.forax.virtualbean.BeanFactory.Advice;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
@@ -21,15 +23,15 @@ public class Example3 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    var interceptor = new BeanFactory.Advice() {
+    var interceptor = new Advice() {
       @Override
       public void pre(Method method, Object proxy, Object[] args) {
-        System.out.println("enter " + method + " " + Arrays.toString(args));
+        System.out.println("enter " + method);
       }
 
       @Override
       public void post(Method method, Object proxy, Object[] args) {
-        System.out.println("exit " + method + " " + Arrays.toString(args));
+        System.out.println("exit " + method);
       }
     }.asInterceptor();
 

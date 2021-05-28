@@ -1,5 +1,7 @@
 package com.github.forax.virtualbean;
 
+import com.github.forax.virtualbean.BeanFactory.Advice;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
@@ -52,7 +54,7 @@ public class Example2 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new BeanFactory.Advice() {
+    beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
       @Override
       public void pre(Method method, Object proxy, Object[] args) { }
 
@@ -64,7 +66,7 @@ public class Example2 {
         }
       }
     });
-    beanFactory.registerAdvice(Transactional.class, new BeanFactory.Advice() {
+    beanFactory.registerAdvice(Transactional.class, new Advice() {
       @Override
       public void pre(Method method, Object proxy, Object[] args) {
         var dirtySet = Collections.newSetFromMap(new IdentityHashMap<>());

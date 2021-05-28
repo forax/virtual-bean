@@ -102,7 +102,7 @@ Now we can provide a real implementation for the method `pre`
       }
 ```
 
-The full code is available here:
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example.java
 
 
 ## A dirty set example
@@ -200,7 +200,7 @@ and store the corresponding in the _dirty set_ of the entity manager and
   }
 ```
 
-The full code is available here:
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example2.java
 
 
 ## Dynamically add/remove an interceptor
@@ -251,4 +251,4 @@ Then we can register or unregister the logging interceptor
   }
 ```
 
-The full code is available here:
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example3.java

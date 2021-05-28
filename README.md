@@ -24,8 +24,7 @@ handles and can also be unregistered with
 `unregisterInterceptor(annotation, interceptor)`.
 
 The beauty of all of this is that the separation of concern between
-the virtual bean, and the advice actually does not hinder performance,
-but actually helps
+the virtual bean, and the advice does not hinder performance, but actually helps
 - the implementation is fully lazy, if a method of the virtual bean is never
   called the runtime cost is zero
 - all the advices are resolved once per call (apart in case of unregistering)  
@@ -33,7 +32,7 @@ but actually helps
 - if there are several interceptors for a call, there are called one after the
   other, and not one on top of the others, so no gigantic stracktraces
 - speaking of stacktraces, all the plumbing is done by method handles
-  so do not appear in stacktraces at all.
+  so it does not appear in stacktraces at all.
 
 Enough talk, let see some examples.  
 

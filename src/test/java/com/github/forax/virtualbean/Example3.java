@@ -1,20 +1,32 @@
 package com.github.forax.virtualbean;
 
-import com.github.forax.virtualbean.BeanFactory.Advice;
-
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Method;
+import java.lang.invoke.MethodType;
+import java.util.Objects;
+
+import static com.github.forax.virtualbean.BeanFactory.Interceptor.Kind.POST;
 
 public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)
-  @interface Log { }
+  @interface ParametersNonNull { }
 
   interface HelloManager {
-    @Log
-    default void sayHello(String text) {
+    @ParametersNonNull
+    default void sayHello(String text)  {
       System.out.println("hello " + text);
+    }
+  }
+
+
+  private static final MethodHandle REQUIRE_NON_NULL;
+  static {
+    try {
+      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class, "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new AssertionError(e);
     }
   }
 
@@ -22,25 +34,27 @@ public class Example3 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    var interceptor = new Advice() {
-      @Override
-      public void pre(Method method, Object bean, Object[] args) {
-        System.out.println("enter " + method);
+    beanFactory.registerInterceptor(ParametersNonNull.class, __ -> true, (kind, method, type) -> {
+      if (kind == POST) {
+        return null;
       }
-
-      @Override
-      public void post(Method method, Object bean, Object[] args) {
-        System.out.println("exit " + method);
+      var parameterTypes = method.getParameterTypes();
+      var filters = new MethodHandle[parameterTypes.length];
+      for(var i = 0; i < parameterTypes.length; i++) {
+        var parameterType = parameterTypes[i];
+        if (parameterType.isPrimitive()) {
+          continue;
+        }
+        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1, "argument " + i + " of " + method + " is null");
+        var filter = requireNonNull.asType(MethodType.methodType(parameterType, parameterType));
+        filters[i] = filter;
       }
-    }.asInterceptor();
+      var empty = MethodHandles.empty(type);
+      return MethodHandles.filterArguments(empty, 1, filters);
+    });
 
     var helloManager = beanFactory.create(HelloManager.class);
-    helloManager.sayHello("no log");
-
-    beanFactory.registerInterceptor(Log.class, __ -> true, interceptor);
-    helloManager.sayHello("with log");
-
-    beanFactory.unregisterInterceptor(Log.class, interceptor);
-    helloManager.sayHello("with no log anymore");
+    helloManager.sayHello("Bob");
+    helloManager.sayHello(null);
   }
 }

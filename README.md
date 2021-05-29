@@ -36,71 +36,54 @@ the virtual bean, and the advice does not hinder performance, but actually helps
 
 Enough talk, let see some examples.  
 
-## A bound check example
 
-The virtual bean `Service` defines a method `foo`
+## All your parameter are belong to us
+
+The virtual bean `HelloManager` defines a method `sayHello` annotated with
+an annotation `@ParametersNonNull` to say that the parameter should not be null
 ```java
-interface Service {
-  default void foo(@BoundChecks(min = 0, max = 10) int value)  {
-    System.out.println("foo " + value);
+@Retention(RetentionPolicy.RUNTIME)
+@interface ParametersNonNull { }
+
+interface HelloManager {
+  @ParametersNonNull
+  default void sayHello(String text)  {
+    System.out.println("hello " + text);
   }
 }
 ```
 
-The service `foo` uses the annotation `BoundChecks` defined that way
-```java
-@Retention(RetentionPolicy.RUNTIME)
-@interface BoundChecks {
-  int max();
-  int min();
-}
-```
-
-The `BeanFactory` API let you define the semantics of the annotation `@BoundChecks`
+The `BeanFactory` API let you define the semantics of the annotation `@ParametersNonNull`
 using an advice with `registerAdvice()` and automatically provides an implementation
 of any virtual beans with `create()`.
 
-Here is an example that prints the arguments before and after a method annotated with
-`@BoundChacks`.``
+So we register an advice for the annotation class `ParametersNonNull` that calls
+`Objects.requireNonNull` on all arguments and test by creating a `HelloManager`.
 ```java
   public static void main(String[] args) {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerAdvice(BoundChecks.class, new Advice() {
+    beanFactory.registerAdvice(ParametersNonNull.class, new Advice() {
       public void pre(Method method, Object bean, Object[] args) {
         System.out.println("pre " + Arrays.toString(args));
-        //TODO
+        for (int i = 0; i < args.length; i++) {
+          Objects.requireNonNull(args[i], "argument " + i + " of " + method + " is null");
+        }
       }
-      
+
       public void post(Method method, Object bean, Object[] args) {
         System.out.println("post " + Arrays.toString(args));
       }
     });
 
-    var service = beanFactory.create(Service.class);
-    service.foo(3);
-    service.foo(-1);
+    var helloManager = beanFactory.create(HelloManager.class);
+    helloManager.sayHello("Bob");
+    helloManager.sayHello(null);
   }
 ```
 
-Now we can provide a real implementation for the method `pre`
-```java
-      public void pre(Method method, Object bean, Object[] args) {
-        System.out.println("pre " + Arrays.toString(args));
-        var parameterAnnotations = method.getParameterAnnotations();
-        for(var i = 0; i < args.length; i++) {
-          for(var annotation:  parameterAnnotations[i]) {
-            if (annotation instanceof BoundChecks boundChecks) {
-              var value = (int) args[i];
-              if (value < boundChecks.min() || value > boundChecks.max()) {
-                throw new IllegalArgumentException("invalid value " + value);
-              }
-            }
-          }
-        }
-      }
-```
+If you run this code, the last call to `sayHello` will throw a `NullPointException` because the argument is null. 
 
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example.java
 
@@ -203,6 +186,73 @@ and store the corresponding in the _dirty set_ of the entity manager and
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example2.java
 
 
+## AAll your parameter are belong to us (2)
+
+The code above that does the runtime check using an advice can be improved
+to be more efficient at the price of being a little more cryptic using
+the package `java.lang.invoke`.
+
+An advice box all the arguments in an array of objects, we can avoid that by using an interceptor.
+So the start of the code is the same, we create an annotation and using it on a method of a virtual bean,
+but we also create a method handle (a function pointer) on `Objects.requireNonNull`
+```java
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface ParametersNonNull { }
+
+  interface HelloManager {
+    @ParametersNonNull
+    default void sayHello(String text)  {
+      System.out.println("hello " + text);
+    }
+  }
+  
+  private static final MethodHandle REQUIRE_NON_NULL;
+  static {
+    try {
+      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class, "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new AssertionError(e);
+    }
+  }
+```
+
+We register an interceptor that will be called only once per method call and return a method handle that
+will check that if a parameter is an object, the method handle corresponding to `requireNonNull` must be called.
+```java
+  public static void main(String[] args) {
+    var lookup = MethodHandles.lookup();
+    var beanFactory = new BeanFactory(lookup);
+
+    beanFactory.registerInterceptor(ParametersNonNull.class, __ -> true, (kind, method, type) -> {
+      if (kind == POST) {
+        return null;
+      }
+      var parameterTypes = method.getParameterTypes();
+      var filters = new MethodHandle[parameterTypes.length];
+      for(var i = 0; i < parameterTypes.length; i++) {
+        var parameterType = parameterTypes[i];
+        if (parameterType.isPrimitive()) {
+          continue;
+        }
+        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1, "argument " + i + " of " + method + " is null");
+        var filter = requireNonNull.asType(MethodType.methodType(parameterType, parameterType));
+        filters[i] = filter;
+      }
+      var empty = MethodHandles.empty(type);
+      return MethodHandles.filterArguments(empty, 1, filters);
+    });
+
+    var helloManager = beanFactory.create(HelloManager.class);
+    helloManager.sayHello("Bob");
+    helloManager.sayHello(null);
+  }
+```
+
+The behavior of this code is identical, but it performs better because arguments are not boxed anymore.
+
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example3.java
+
+
 ## Dynamically add/remove an interceptor
 
 The class `BeanFactory` provides the capability to not only add an interceptor
@@ -251,4 +301,4 @@ Then we can register or unregister the logging interceptor
   }
 ```
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example3.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example4.java

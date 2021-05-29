@@ -84,6 +84,8 @@ So we register an advice for the annotation class `ParametersNonNull` that calls
 ```
 
 If you run this code, the last call to `sayHello` will throw a `NullPointException` because the argument is null. 
+It's not the most efficient code tho, mostly because for each call, arguments are boxed in an array.
+The example 3, below, explains how to alleviate that issue.
 
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example.java
 

@@ -222,6 +222,25 @@ public class BeanFactory {
    * annotated by the annotation, the method annotated by the annotation of one of the parameter or
    * return value annotated by the annotation. Annotations on types are not considered.
    *
+   * This call is semantically equivalent to
+   * <pre>
+   *   registerInterceptor(annotationType, __ -> true, interceptor)
+   * </pre>
+   *
+   * @param annotationType the type of the annotation
+   * @param interceptor the interceptor to call if the method is decorated by an annotation of the {@code annotationType}
+   * @throws IllegalArgumentException if the annotation has a retention different
+   *         from {@link RetentionPolicy#RUNTIME}
+   */
+  public void registerInterceptor(Class<? extends Annotation> annotationType, Interceptor interceptor) {
+    registerInterceptor(annotationType, __ -> true, interceptor);
+  }
+
+  /**
+   * Register an interceptor that will be called that either have their declaring class
+   * annotated by the annotation, the method annotated by the annotation of one of the parameter or
+   * return value annotated by the annotation. Annotations on types are not considered.
+   *
    * @param annotationType the type of the annotation
    * @param filter a predicate calls to ask if the interceptor applied to a particular method
    * @param interceptor the interceptor to call if the method is decorated by an annotation of the {@code annotationType}

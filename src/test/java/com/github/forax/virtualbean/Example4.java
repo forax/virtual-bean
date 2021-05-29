@@ -37,7 +37,7 @@ public class Example4 {
     var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("no log");
 
-    beanFactory.registerInterceptor(Log.class, __ -> true, interceptor);
+    beanFactory.registerInterceptor(Log.class, interceptor);
     helloManager.sayHello("with log");
 
     beanFactory.unregisterInterceptor(Log.class, interceptor);

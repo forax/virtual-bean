@@ -42,7 +42,7 @@ public class Example6 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerInterceptor(BoundChecks.class, __ -> true, (kind, method, type) -> {
+    beanFactory.registerInterceptor(BoundChecks.class, (kind, method, type) -> {
       if (kind == POST) {
         return null;
       }

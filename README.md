@@ -223,7 +223,7 @@ will check that if a parameter is an object, the method handle corresponding to 
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerInterceptor(ParametersNonNull.class, __ -> true, (kind, method, type) -> {
+    beanFactory.registerInterceptor(ParametersNonNull.class, (kind, method, type) -> {
       if (kind == POST) {
         return null;
       }
@@ -293,7 +293,7 @@ Then we can register or unregister the logging interceptor
     var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("no log");
 
-    beanFactory.registerInterceptor(Log.class, __ -> true, interceptor);
+    beanFactory.registerInterceptor(Log.class, interceptor);
     helloManager.sayHello("with log");
 
     beanFactory.unregisterInterceptor(Log.class, interceptor);

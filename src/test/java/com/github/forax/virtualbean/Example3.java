@@ -34,7 +34,7 @@ public class Example3 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerInterceptor(ParametersNonNull.class, __ -> true, (kind, method, type) -> {
+    beanFactory.registerInterceptor(ParametersNonNull.class, (kind, method, type) -> {
       if (kind == POST) {
         return null;
       }

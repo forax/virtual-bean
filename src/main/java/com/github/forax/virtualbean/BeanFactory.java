@@ -30,9 +30,16 @@ import static java.lang.invoke.MethodType.methodType;
 import static java.util.Objects.requireNonNull;
 
 /**
- * A bean factory is created with a {@link Lookup}, registers {@link Advice}s and {@link Interceptor}s and
- * provides {@link #create(Class) proxies} with methods that can be intercepted by the advices and
- * interceptor registered.
+ * Class that creates and manages {@link Metadata virtual bean} instances.
+ *
+ * A bean factory
+ * <ul>
+ *   <li>is created with a {@link Lookup},
+ *   <li>can {@link #registerAdvice(Class, Advice) register} {@link Advice}s and/or
+ *           {@link #registerInterceptor(Class, Interceptor)} (Class, Advice) register} {@link Interceptor}s and
+ *   <li>can {@link #create(Class) create} bean instances with methods that can be intercepted
+ *       by the advices and interceptor registered in the past or in the future.
+ * </ul>
  */
 public class BeanFactory {
   private static final MethodHandle BSM;
@@ -96,6 +103,9 @@ public class BeanFactory {
     MethodHandle intercept(Kind kind, Method method, MethodType type);
   }
 
+  /**
+   * Holder pattern to delay the initialization of PRE and POST until an advice need to be resolved.
+   */
   private static class AdviceImpl {
     private static final MethodHandle PRE, POST;
     static {
@@ -156,6 +166,9 @@ public class BeanFactory {
     }
   }
 
+  /**
+   * A tuple (methodFilter, Interceptor)
+   */
   private record InterceptorData(Predicate<Method> methodFilter, Interceptor interceptor) { }
 
   private final Lookup lookup;
@@ -263,7 +276,7 @@ public class BeanFactory {
   }
 
   /**
-   * Unregister an interceptor registered for an annotation type.
+   * Unregister an interceptor previously registered for an annotation type.
    * This operation can be quite slow because it will trigger at least the de-optimization of all codes
    * using that interceptor.
    *
@@ -298,6 +311,10 @@ public class BeanFactory {
     }
   }
 
+  /**
+   * Call site that will be used to dynamically update {@link Interceptor.Kind#PRE} and
+   * {@link Interceptor.Kind#POST} interceptors.
+   */
   private final class SwitchableCallSite extends MutableCallSite {
     private static final MethodHandle INVALIDATE;
     static {
@@ -311,19 +328,28 @@ public class BeanFactory {
     private final BeanFactory.Interceptor.Kind kind;
     private final Method method;
 
-    public SwitchableCallSite(BeanFactory.Interceptor.Kind kind, Method method, MethodType type) {
+    private SwitchableCallSite(BeanFactory.Interceptor.Kind kind, Method method, MethodType type) {
       super(type);
       this.kind = kind;
       this.method = method;
       setTarget(prepare(target(kind, method, type)));
     }
 
+    /**
+     * Called if a new interceptor was added in the past, changing the list of interceptors to call
+     * @return all the interceptors to called flatten as one method handle
+     */
     private MethodHandle invalidate() {
       var target = target(kind, method, type());
       setTarget(prepare(target));
       return target;
     }
 
+    /**
+     * Wrap the target with a guard that check that the target is still valid.
+     * @param target all the interceptors to called flatten as one method handle
+     * @return the guard
+     */
     private MethodHandle prepare(MethodHandle target) {
       var invoker = MethodHandles.exactInvoker(type());
       var fallback = MethodHandles.foldArguments(invoker, INVALIDATE.bindTo(this));
@@ -336,6 +362,14 @@ public class BeanFactory {
     }
   }
 
+  /**
+   * Call the registered interceptors and flatten all method handles into one method handle
+   *
+   * @param kind the kind of interceptor {@link Interceptor.Kind#PRE} or {@link Interceptor.Kind#POST}
+   * @param method the intercepted method
+   * @param type the method type of the resulting method handle
+   * @return a method handle combining all the intercepting method handles
+   */
   private MethodHandle target(BeanFactory.Interceptor.Kind kind, Method method, MethodType type) {
     var interceptors =
         Stream.of(
@@ -349,13 +383,23 @@ public class BeanFactory {
     return flattenInterceptors(interceptors, method, kind, type);
   }
 
-  private CallSite bsm(MethodHandles.Lookup lookup, String name, MethodType type, MethodHandle impl) {
+  /**
+   * Called by each bean methods to get create a call site before and after the implementation
+   * @param lookup the lookup corresponding to the proxy class
+   * @param name either {@code pre} or {@code post}
+   * @param type the method type, the same signature as the intercepted method but
+   *             the bean instance is passed as first parameter, typed as {code Object},
+   *             and the return type is always {0code void}
+   * @param intercepted a method handle corresponding to the intercepted method
+   * @return a new call site
+   */
+  private CallSite bsm(MethodHandles.Lookup lookup, String name, MethodType type, MethodHandle intercepted) {
     var kind = switch(name) {
       case "pre" -> Interceptor.Kind.PRE;
       case "post" -> Interceptor.Kind.POST;
       default -> throw new LinkageError("unknown kind " + name);
     };
-    var mhInfo = lookup.revealDirect(impl);
+    var mhInfo = lookup.revealDirect(intercepted);
     var method = mhInfo.reflectAs(Method.class, lookup);
     return new SwitchableCallSite(kind, method, type);
   }

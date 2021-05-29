@@ -27,6 +27,8 @@ import static java.lang.invoke.MethodType.methodType;
  *   <li>services define as default methods,
  *     any default is a service.
  * </ul>
+ *
+ * @see BeanFactory
  */
 public record Metadata(Table<Property> properties, Table<Service> services) {
   /**

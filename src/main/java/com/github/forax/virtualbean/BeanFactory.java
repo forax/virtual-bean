@@ -156,7 +156,7 @@ public class BeanFactory {
     }
   }
 
-  private record InterceptorData(Predicate<Method> filter, Interceptor interceptor) { }
+  private record InterceptorData(Predicate<Method> methodFilter, Interceptor interceptor) { }
 
   private final Lookup lookup;
   private final Object switchPointLock = new Object();
@@ -202,19 +202,19 @@ public class BeanFactory {
    *
    * This call is semantically equivalent to
    * <pre>
-   *   registerInterceptor(annotationType, filter, advice.asInterceptor())
+   *   registerInterceptor(annotationType, methodFilter, advice.asInterceptor())
    * </pre>
    *
    * @param annotationType the type of the annotation
-   * @param filter a predicate calls to ask if the advice applied to a particular method
+   * @param methodFilter a predicate calls to ask if the advice applied to a particular method
    * @param advice the advice to call if the method is decorated by an annotation of the {@code annotationType}
    * @throws IllegalArgumentException if the annotation has a retention different
    *         from {@link RetentionPolicy#RUNTIME}
    *
    * @see #registerInterceptor(Class, Predicate, Interceptor)
    */
-  public void registerAdvice(Class<? extends Annotation> annotationType, Predicate<Method> filter, Advice advice) {
-    registerInterceptor(annotationType, filter, advice.asInterceptor());
+  public void registerAdvice(Class<? extends Annotation> annotationType, Predicate<Method> methodFilter, Advice advice) {
+    registerInterceptor(annotationType, methodFilter, advice.asInterceptor());
   }
 
   /**
@@ -242,14 +242,14 @@ public class BeanFactory {
    * return value annotated by the annotation. Annotations on types are not considered.
    *
    * @param annotationType the type of the annotation
-   * @param filter a predicate calls to ask if the interceptor applied to a particular method
+   * @param methodFilter a predicate calls to ask if the interceptor applied to a particular method
    * @param interceptor the interceptor to call if the method is decorated by an annotation of the {@code annotationType}
    * @throws IllegalArgumentException if the annotation has a retention different
    *         from {@link RetentionPolicy#RUNTIME}
    */
-  public void registerInterceptor(Class<? extends Annotation> annotationType, Predicate<Method> filter, Interceptor interceptor) {
+  public void registerInterceptor(Class<? extends Annotation> annotationType, Predicate<Method> methodFilter, Interceptor interceptor) {
     requireNonNull(annotationType);
-    requireNonNull(filter);
+    requireNonNull(methodFilter);
     requireNonNull(interceptor);
     if (!annotationType.isAnnotation()) {
       throw new IllegalArgumentException("annotationType is not an annotation");
@@ -258,7 +258,7 @@ public class BeanFactory {
     if (retention == null || retention.value() != RetentionPolicy.RUNTIME) {
       throw new IllegalArgumentException("@Retention of  " + annotationType.getName() + " should be RetentionPolicy.RUNTIME)");
     }
-    interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(filter, interceptor));
+    interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(methodFilter, interceptor));
     invalidateSwitchPoint();
   }
 
@@ -364,7 +364,7 @@ public class BeanFactory {
     return annotations
         .flatMap(annotation ->
             getInterceptorData(annotation.annotationType()).stream()
-                .filter(interceptorData -> interceptorData.filter.test(method))
+                .filter(interceptorData -> interceptorData.methodFilter.test(method))
                 .map(InterceptorData::interceptor)
         );
   }

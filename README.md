@@ -186,7 +186,7 @@ and store the corresponding in the _dirty set_ of the entity manager and
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example2.java
 
 
-## AAll your parameter are belong to us (2)
+## All your parameter are belong to us (2)
 
 The code above that does the runtime check using an advice can be improved
 to be more efficient at the price of being a little more cryptic using

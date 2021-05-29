@@ -25,7 +25,7 @@ public class Example {
 
     beanFactory.registerAdvice(BoundChecks.class, new BeanFactory.Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         System.out.println("pre " + Arrays.toString(args));
         var parameterAnnotations = method.getParameterAnnotations();
         for(var i = 0; i < args.length; i++) {
@@ -41,12 +41,12 @@ public class Example {
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         System.out.println("post " + Arrays.toString(args));
       }
     });
 
-    var service = beanFactory.proxy(Service.class);
+    var service = beanFactory.create(Service.class);
     service.foo(3);
     service.foo(-1);
   }

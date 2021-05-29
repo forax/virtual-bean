@@ -31,7 +31,7 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * A bean factory is created with a {@link Lookup}, registers {@link Advice}s and {@link Interceptor}s and
- * provides {@link #proxy(Class) proxies} with methods that can be intercepted by the advices and
+ * provides {@link #create(Class) proxies} with methods that can be intercepted by the advices and
  * interceptor registered.
  */
 public class BeanFactory {
@@ -123,20 +123,20 @@ public class BeanFactory {
     /**
      * Called before the intercepted method with the method arguments boxed into an array.
      * @param method the intercepted method
-     * @param proxy the proxy instance on which the method is called
+     * @param bean the bean instance on which the method is called
      * @param args the method call arguments
      * @throws Throwable any exceptions
      */
-    void pre(Method method, Object proxy, Object[] args) throws Throwable;
+    void pre(Method method, Object bean, Object[] args) throws Throwable;
 
     /**
      * Called after the intercepted method with the method arguments boxed into an array.
      * @param method the intercepted method
-     * @param proxy the proxy instance on which the method is called
+     * @param bean the bean instance on which the method is called
      * @param args the method call arguments
      * @throws Throwable any exceptions
      */
-    void post(Method method, Object proxy, Object[] args) throws Throwable;
+    void post(Method method, Object bean, Object[] args) throws Throwable;
 
     /**
      * Creates an interceptor from this advice.
@@ -161,13 +161,13 @@ public class BeanFactory {
   private final Lookup lookup;
   private final Object switchPointLock = new Object();
   private SwitchPoint switchPoint;
-  private final HashMap<Class<?>, Supplier<?>> proxyFactoryMap = new HashMap<>();
+  private final HashMap<Class<?>, Supplier<?>> beanFactoryMap = new HashMap<>();
   private final HashMap<Class<?>, List<InterceptorData>> interceptorMap = new HashMap<>();
 
   /**
    * Creates a registry with a lookup, all proxies created by this registry will use that lookup,
    * thus will have the same access right as the class in which the {@link Lookup lookup} was created
-   * @param lookup the lookup that will be used to {@link #proxy(Class) create the proxy}
+   * @param lookup the lookup that will be used to {@link #create(Class) create the bean instances}
    */
   public BeanFactory(Lookup lookup) {
     this.lookup = requireNonNull(lookup);
@@ -374,24 +374,24 @@ public class BeanFactory {
   }
 
   /**
-   * Create a new proxy instance from an interface defining {@link Metadata#properties()} and
+   * Create an instance from an interface defining {@link Metadata#properties()} and
    * {@link Metadata#services()}.
    *
    * @param type an interface that defines {@link Metadata#properties()} and {@link Metadata#services()}
    * @param <I> the type of the interface
-   * @return a new proxy instance of the interface
+   * @return a new instance of the interface
    * @throws IllegalArgumentException if type is not an interface
    * @throws IllegalStateException if the interface does not describe a virtual bean
    *
    * @see Metadata#of(Class)
    */
   @SuppressWarnings("unchecked")
-  public <I> I proxy(Class<I> type) {
+  public <I> I create(Class<I> type) {
     requireNonNull(type);
     if (!(type.isInterface())) {
       throw new IllegalArgumentException("type " + type.getName() + " should be an interface");
     }
-    var factory = proxyFactoryMap.computeIfAbsent(type,
+    var factory = beanFactoryMap.computeIfAbsent(type,
         t -> ProxyGenerator.createProxyFactory(lookup, t, BSM.bindTo(this)));
     return (I)factory.get();
   }

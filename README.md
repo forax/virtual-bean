@@ -10,7 +10,7 @@ from the semantics  of the annotation defined in terms of advices and
 interceptors that can be added and removed dynamically.
 
 Conceptually, there are only two operations:
-- `proxy(interface)` takes a virtual bean (the interface) and returns an instance
+- `create(interface)` takes a virtual bean (the interface) and returns an instance
   of that interface with all the property initialize to their default values.
 - `registerAdvice(annotation, filter, advice)` adds an advice (a method run before,
   and a method run after) to all methods that defines the annotation
@@ -58,7 +58,7 @@ The service `foo` uses the annotation `BoundChecks` defined that way
 
 The `BeanFactory` API let you define the semantics of the annotation `@BoundChecks`
 using an advice with `registerAdvice()` and automatically provides an implementation
-of any virtual beans with `proxy()`.
+of any virtual beans with `create()`.
 
 Here is an example that prints the arguments before and after a method annotated with
 `@BoundChacks`.``
@@ -68,17 +68,17 @@ Here is an example that prints the arguments before and after a method annotated
     var beanFactory = new BeanFactory(lookup);
 
     beanFactory.registerAdvice(BoundChecks.class, new Advice() {
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         System.out.println("pre " + Arrays.toString(args));
         //TODO
       }
       
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         System.out.println("post " + Arrays.toString(args));
       }
     });
 
-    var service = beanFactory.proxy(Service.class);
+    var service = beanFactory.create(Service.class);
     service.foo(3);
     service.foo(-1);
   }
@@ -86,7 +86,7 @@ Here is an example that prints the arguments before and after a method annotated
 
 Now we can provide a real implementation for the method `pre`
 ```java
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         System.out.println("pre " + Arrays.toString(args));
         var parameterAnnotations = method.getParameterAnnotations();
         for(var i = 0; i < args.length; i++) {
@@ -135,7 +135,7 @@ then we define an annotation `Transactional` and a service `UserManager`
 interface UserManager {
   @Transactional
   default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-    var user = beanFactory.proxy(UserBean.class);
+    var user = beanFactory.create(UserBean.class);
     user.setName(name);
     user.setEmail(email);
     EntityManager.current().update();
@@ -173,28 +173,28 @@ and store the corresponding in the _dirty set_ of the entity manager and
     var beanFactory = new BeanFactory(lookup);
 
     beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
-      public void pre(Method method, Object proxy, Object[] args) { }
+      public void pre(Method method, Object bean, Object[] args) { }
 
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         var entityManager = EntityManager.current();
         if (entityManager != null) {
-          entityManager.dirtySet.add(proxy);
+          entityManager.dirtySet.add(bean);
         }
       }
     });
     beanFactory.registerAdvice(Transactional.class, new Advice() {
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         var dirtySet = Collections.newSetFromMap(new IdentityHashMap<>());
         var entityManager = new EntityManager(dirtySet);
         ENTITY_MANAGERS.set(entityManager);
       }
 
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         ENTITY_MANAGERS.remove();
       }
     });
     
-    var userManager = beanFactory.proxy(UserManager.class);
+    var userManager = beanFactory.create(UserManager.class);
     var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
     System.out.println("user " + user.getName() + " " + user.getEmail());
   }
@@ -231,16 +231,16 @@ Then we can register or unregister the logging interceptor
     var beanFactory = new BeanFactory(lookup);
 
     var interceptor = new Advice() {
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         System.out.println("enter " + method);
       }
 
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         System.out.println("exit " + method);
       }
     }.asInterceptor();
 
-    var helloManager = beanFactory.proxy(HelloManager.class);
+    var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("no log");
 
     beanFactory.registerInterceptor(Log.class, __ -> true, interceptor);

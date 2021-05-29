@@ -6,7 +6,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
-import java.util.Arrays;
 
 public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)
@@ -25,17 +24,17 @@ public class Example3 {
 
     var interceptor = new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         System.out.println("enter " + method);
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         System.out.println("exit " + method);
       }
     }.asInterceptor();
 
-    var helloManager = beanFactory.proxy(HelloManager.class);
+    var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("no log");
 
     beanFactory.registerInterceptor(Log.class, __ -> true, interceptor);

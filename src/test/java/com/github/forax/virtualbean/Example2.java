@@ -28,7 +28,7 @@ public class Example2 {
   interface UserManager {
     @Transactional
     default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-      var user = beanFactory.proxy(UserBean.class);
+      var user = beanFactory.create(UserBean.class);
       user.setName(name);
       user.setEmail(email);
 
@@ -56,32 +56,32 @@ public class Example2 {
 
     beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) { }
+      public void pre(Method method, Object bean, Object[] args) { }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         var entityManager = EntityManager.current();
         if (entityManager != null) {
-          entityManager.dirtySet.add(proxy);
+          entityManager.dirtySet.add(bean);
         }
       }
     });
     beanFactory.registerAdvice(Transactional.class, new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         var dirtySet = Collections.newSetFromMap(new IdentityHashMap<>());
         var entityManager = new EntityManager(dirtySet);
         ENTITY_MANAGERS.set(entityManager);
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         ENTITY_MANAGERS.remove();
       }
     });
 
 
-    var userManager = beanFactory.proxy(UserManager.class);
+    var userManager = beanFactory.create(UserManager.class);
     var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
     System.out.println("user " + user.getName() + " " + user.getEmail());
   }

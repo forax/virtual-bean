@@ -1,5 +1,6 @@
 package com.github.forax.virtualbean;
 
+import com.github.forax.virtualbean.BeanFactory.Advice;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Annotation;
@@ -14,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BeanFactoryTest {
   @Test
-  public void proxyEntity() {
+  public void beanEntity() {
     interface Entity {
       String getName();
       void setName(String name);
@@ -23,7 +24,7 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    var entity = factory.proxy(Entity.class);
+    var entity = factory.create(Entity.class);
     entity.setName("foo");
     entity.setCount(13);
     assertAll(
@@ -33,7 +34,7 @@ public class BeanFactoryTest {
   }
 
   @Test
-  public void proxyService() {
+  public void beanService() {
     interface Service {
       default String sayHello(String name) {
         return "hello " + name;
@@ -41,14 +42,14 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    var service = factory.proxy(Service.class);
+    var service = factory.create(Service.class);
     assertEquals("hello Bob", service.sayHello("Bob"));
   }
 
   @Test
-  public void proxyObjectFail() {
+  public void beanObjectFail() {
     var factory = new BeanFactory(lookup());
-    assertThrows(IllegalArgumentException.class, () -> factory.proxy(Object.class));
+    assertThrows(IllegalArgumentException.class, () -> factory.create(Object.class));
   }
 
   @Retention(RetentionPolicy.RUNTIME)
@@ -65,37 +66,37 @@ public class BeanFactoryTest {
 
     var factory = new BeanFactory(lookup());
     var box = new Object() {
-      Object proxy;
+      Object bean;
       int preCalled;
       int postCalled;
     };
-    factory.registerAdvice(SideEffect.class, new BeanFactory.Advice() {
+    factory.registerAdvice(SideEffect.class, new Advice() {
       @Override
       @SuppressWarnings("RedundantThrows")
-      public void pre(Method method, Object proxy, Object[] args) throws Throwable {
+      public void pre(Method method, Object bean, Object[] args) throws Throwable {
         box.preCalled++;
         assertAll(
             () -> assertEquals(Computation.class.getMethod("add", int.class, int.class), method),
-            () -> assertEquals(box.proxy, proxy),
+            () -> assertEquals(box.bean, bean),
             () -> assertArrayEquals(new Object[] { 40, 2 }, args)
             );
       }
 
       @Override
       @SuppressWarnings("RedundantThrows")
-      public void post(Method method, Object proxy, Object[] args) throws Throwable {
+      public void post(Method method, Object bean, Object[] args) throws Throwable {
         box.postCalled++;
         assertAll(
             () -> assertEquals(Computation.class.getMethod("add", int.class, int.class), method),
-            () -> assertEquals(box.proxy, proxy),
+            () -> assertEquals(box.bean, bean),
             () -> assertArrayEquals(new Object[] { 40, 2 }, args)
         );
       }
     });
-    var proxy = factory.proxy(Computation.class);
-    box.proxy = proxy;
+    var bean = factory.create(Computation.class);
+    box.bean = bean;
     assertAll(
-        () -> assertEquals(42, proxy.add(40, 2)),
+        () -> assertEquals(42, bean.add(40, 2)),
         () -> assertEquals(1, box.preCalled),
         () -> assertEquals(1, box.postCalled)
     );
@@ -111,19 +112,19 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerAdvice(SideEffect.class, __ -> false, new BeanFactory.Advice() {
+    factory.registerAdvice(SideEffect.class, __ -> false, new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         fail();
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         fail();
       }
     });
-    var proxy = factory.proxy(Computation.class);
-    assertEquals(42, proxy.add(40, 2));
+    var bean = factory.create(Computation.class);
+    assertEquals(42, bean.add(40, 2));
   }
 
   @Test
@@ -140,19 +141,19 @@ public class BeanFactoryTest {
       int preCalled;
       int postCalled;
     };
-    factory.registerAdvice(SideEffect.class, new BeanFactory.Advice() {
+    factory.registerAdvice(SideEffect.class, new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         box.preCalled++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         box.postCalled++;
       }
     });
-    var proxy = factory.proxy(Computation.class);
-    assertEquals("foobar", proxy.concat("foo", "bar"));
+    var bean = factory.create(Computation.class);
+    assertEquals("foobar", bean.concat("foo", "bar"));
     assertAll(
         () -> assertEquals(1, box.preCalled),
         () -> assertEquals(1, box.postCalled)
@@ -172,19 +173,19 @@ public class BeanFactoryTest {
       int preCalled;
       int postCalled;
     };
-    factory.registerAdvice(SideEffect.class, new BeanFactory.Advice() {
+    factory.registerAdvice(SideEffect.class, new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         box.preCalled++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         box.postCalled++;
       }
     });
-    var proxy = factory.proxy(Computation.class);
-    assertEquals(42L, proxy.mult(21, 2));
+    var bean = factory.create(Computation.class);
+    assertEquals(42L, bean.mult(21, 2));
     assertAll(
         () -> assertEquals(1, box.preCalled),
         () -> assertEquals(1, box.postCalled)
@@ -199,38 +200,38 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    var advice1 = new BeanFactory.Advice() {
+    var advice1 = new Advice() {
       int preCalledAdvice1;
       int postCalledAdvice1;
 
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         preCalledAdvice1++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         postCalledAdvice1++;
       }
     };
-    var advice2 = new BeanFactory.Advice() {
+    var advice2 = new Advice() {
       int preCalledAdvice2;
       int postCalledAdvice2;
 
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         preCalledAdvice2++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         postCalledAdvice2++;
       }
     };
     factory.registerAdvice(SideEffect.class, advice1);
     factory.registerAdvice(SideEffect.class, advice2);
-    var proxy = factory.proxy(FooService.class);
-    proxy.foo();
+    var bean = factory.create(FooService.class);
+    bean.foo();
     assertAll(
         () -> assertEquals(1, advice1.preCalledAdvice1),
         () -> assertEquals(1, advice1.postCalledAdvice1),
@@ -251,38 +252,38 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    var advice1 = new BeanFactory.Advice() {
+    var advice1 = new Advice() {
       int preCalledAdvice1;
       int postCalledAdvice1;
 
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         preCalledAdvice1++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         postCalledAdvice1++;
       }
     };
-    var advice2 = new BeanFactory.Advice() {
+    var advice2 = new Advice() {
       int preCalledAdvice2;
       int postCalledAdvice2;
 
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         preCalledAdvice2++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         postCalledAdvice2++;
       }
     };
     factory.registerAdvice(SideEffect.class, advice1);
     factory.registerAdvice(SideEffect2.class, advice2);
-    var proxy = factory.proxy(FooService.class);
-    proxy.foo();
+    var bean = factory.create(FooService.class);
+    bean.foo();
     assertAll(
         () -> assertEquals(1, advice1.preCalledAdvice1),
         () -> assertEquals(1, advice1.postCalledAdvice1),
@@ -305,14 +306,14 @@ public class BeanFactoryTest {
       int preCalled;
       int postCalled;
     };
-    var advice = new BeanFactory.Advice() {
+    var advice = new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         box.preCalled++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         box.postCalled++;
       }
     };
@@ -325,8 +326,8 @@ public class BeanFactoryTest {
       }
       return true;
     }, interceptor);
-    var proxy = factory.proxy(Computation.class);
-    assertEquals(42L, proxy.mult(21, 2));
+    var bean = factory.create(Computation.class);
+    assertEquals(42L, bean.mult(21, 2));
     assertAll(
         () -> assertEquals(1, box.preCalled),
         () -> assertEquals(1, box.postCalled)
@@ -355,11 +356,11 @@ public class BeanFactoryTest {
       return null;
     };
     factory.registerInterceptor(SideEffect.class, __ -> true, interceptor);
-    var proxy = factory.proxy(Computation.class);
+    var bean = factory.create(Computation.class);
 
     // called twice
-    assertEquals(42L, proxy.div(84, 2));
-    assertEquals(42L, proxy.div(84, 2));
+    assertEquals(42L, bean.div(84, 2));
+    assertEquals(42L, bean.div(84, 2));
 
     assertAll(
         () -> assertEquals(1, box.preCalled),
@@ -381,26 +382,26 @@ public class BeanFactoryTest {
       int preCalled;
       int postCalled;
     };
-    BeanFactory.Interceptor interceptor = new BeanFactory.Advice() {
+    BeanFactory.Interceptor interceptor = new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         box.preCalled++;
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
          box.postCalled++;
       }
     }.asInterceptor();
     factory.registerInterceptor(SideEffect.class, __ -> true, interceptor);
-    var proxy = factory.proxy(Computation.class);
+    var bean = factory.create(Computation.class);
 
     var sum = 0L;
     for(var i = 0; i < 100_000; i++) {
       if (i == 50_000) {
         factory.unregisterInterceptor(SideEffect.class, interceptor);
       }
-      sum = proxy.add(sum, i);
+      sum = bean.add(sum, i);
     }
     var result = sum;
 
@@ -449,9 +450,9 @@ public class BeanFactoryTest {
     factory.registerInterceptor(SideEffect.class, __ -> true, (kind, method, type) -> {
       return MethodHandles.empty(methodType(void.class));
     });
-    var proxy = factory.proxy(Computation.class);
+    var bean = factory.create(Computation.class);
 
-    assertThrows(BootstrapMethodError.class, () -> proxy.add(2, 3));
+    assertThrows(BootstrapMethodError.class, () -> bean.add(2, 3));
   }
 
   @interface BadAnnotationNoRuntimeRetention {}
@@ -459,14 +460,14 @@ public class BeanFactoryTest {
   @Test
   public void registerAdviceBadAnnotation() {
     var beanFactory = new BeanFactory(lookup());
-    var advice = new BeanFactory.Advice() {
+    var advice = new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         fail();
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         fail();
       }
     };
@@ -478,14 +479,14 @@ public class BeanFactoryTest {
   @SuppressWarnings("unchecked")
   public void registerAdviceNotAnAnnotation() {
     var beanFactory = new BeanFactory(lookup());
-    var advice = new BeanFactory.Advice() {
+    var advice = new Advice() {
       @Override
-      public void pre(Method method, Object proxy, Object[] args) {
+      public void pre(Method method, Object bean, Object[] args) {
         fail();
       }
 
       @Override
-      public void post(Method method, Object proxy, Object[] args) {
+      public void post(Method method, Object bean, Object[] args) {
         fail();
       }
     };

@@ -355,7 +355,7 @@ public class BeanFactoryTest {
       }
       return null;
     };
-    factory.registerInterceptor(SideEffect.class, __ -> true, interceptor);
+    factory.registerInterceptor(SideEffect.class, interceptor);
     var bean = factory.create(Computation.class);
 
     // called twice
@@ -393,7 +393,7 @@ public class BeanFactoryTest {
          box.postCalled++;
       }
     }.asInterceptor();
-    factory.registerInterceptor(SideEffect.class, __ -> true, interceptor);
+    factory.registerInterceptor(SideEffect.class, interceptor);
     var bean = factory.create(Computation.class);
 
     var sum = 0L;
@@ -429,9 +429,7 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerInterceptor(SideEffect.class,
-        __ -> true,
-        (kind, method, type) -> { throw new AssertionError(); });
+    factory.registerInterceptor(SideEffect.class, (kind, method, type) -> { throw new AssertionError(); });
     BeanFactory.Interceptor interceptor = (kind, method, type) -> null;
     assertThrows(IllegalStateException.class,
         () -> factory.unregisterInterceptor(SideEffect.class, interceptor));
@@ -447,7 +445,7 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerInterceptor(SideEffect.class, __ -> true, (kind, method, type) -> {
+    factory.registerInterceptor(SideEffect.class, (kind, method, type) -> {
       return MethodHandles.empty(methodType(void.class));
     });
     var bean = factory.create(Computation.class);

@@ -279,7 +279,7 @@ public class BeanFactory {
     }
   }
 
-  private class SwitchableCallSite extends MutableCallSite {
+  private final class SwitchableCallSite extends MutableCallSite {
     private static final MethodHandle INVALIDATE;
     static {
       try {

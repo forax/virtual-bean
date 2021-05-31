@@ -9,6 +9,9 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Objects;
 
+/**
+ * Implement an annotation ParametersNonNull that checks if the parameters are null
+ */
 public class Example {
   @Retention(RetentionPolicy.RUNTIME)
   @interface ParametersNonNull { }

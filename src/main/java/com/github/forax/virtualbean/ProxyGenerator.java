@@ -18,7 +18,6 @@ import java.lang.runtime.ObjectMethods;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static java.lang.invoke.MethodHandles.Lookup.ClassOption.NESTMATE;
@@ -54,7 +53,7 @@ import static org.objectweb.asm.Opcodes.V16;
 
 @SuppressWarnings("HardcodedFileSeparator")
 class ProxyGenerator {
-  public static <T> Supplier<T> createProxyFactory(Lookup lookup, Class<? extends T> proxyType, MethodHandle bsm) {
+  public static MethodHandle createProxyFactory(Lookup lookup, Class<?> proxyType, MethodHandle bsm) {
     var array = gen(lookup.lookupClass(), proxyType);
     Lookup proxyLookup;
     try {
@@ -65,21 +64,11 @@ class ProxyGenerator {
       CheckClassAdapter.verify(new ClassReader(array), true, new PrintWriter(System.err, false, StandardCharsets.UTF_8));
       throw e;
     }
-    MethodHandle constructor;
     try {
-      constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class));
+      return proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new AssertionError(e);
     }
-    return () -> {
-      try {
-        return proxyType.cast(constructor.invoke());
-      } catch(RuntimeException | Error e) {
-        throw e;
-      } catch (Throwable throwable) {
-        throw new AssertionError(throwable);
-      }
-    };
   }
 
   private static final Handle CONDY_BSM = new Handle(H_INVOKESTATIC, "java/lang/invoke/MethodHandles", "classData",
@@ -136,7 +125,13 @@ class ProxyGenerator {
       genMethod(writer, method, bsm, mv -> {
         var declaringClass = method.getDeclaringClass();
         loadThisAndArgumentsOnStack(mv, Type.getArgumentTypes(desc));
-        mv.visitMethodInsn(INVOKESPECIAL, declaringClass.getName().replace('.', '/'), name, desc, true);
+        var declaringClassName = declaringClass.getName().replace('.', '/');
+        if (service.isAbstract()) {
+          var impl = new Handle(H_INVOKEINTERFACE, declaringClassName, name, desc, true);
+          insertIndy(mv, bsm, "invoke", Type.getReturnType(desc), Type.getArgumentTypes(desc), impl);
+        } else {
+          mv.visitMethodInsn(INVOKESPECIAL, declaringClassName, name, desc, true);
+        }
       });
     }
 
@@ -225,7 +220,7 @@ class ProxyGenerator {
 
   private static void genMethod(ClassVisitor cv, Method method, Handle bsm, Consumer<MethodVisitor> code) {
     var methodName = method.getName();
-    var methodDeclaringName = method.getDeclaringClass().getName().replace('.', '/');
+    var declaringClassName = method.getDeclaringClass().getName().replace('.', '/');
     var desc = Type.getMethodDescriptor(method);
     var mv = cv.visitMethod(ACC_PUBLIC, methodName, desc, null, null);
     mv.visitCode();
@@ -238,18 +233,18 @@ class ProxyGenerator {
     mv.visitLabel(start);
     var parameterTypes = Type.getArgumentTypes(desc);
     var returnType = Type.getReturnType(desc);
-    var impl = new Handle(H_INVOKEINTERFACE, methodDeclaringName, methodName, desc, true);
-    insertIndy(mv, bsm,"pre", parameterTypes, impl);
+    var impl = new Handle(H_INVOKEINTERFACE, declaringClassName, methodName, desc, true);
+    insertIndy(mv, bsm,"pre", Type.VOID_TYPE, parameterTypes, impl);
 
     code.accept(mv);
 
     mv.visitLabel(end);
-    insertIndy(mv, bsm, "post", parameterTypes, impl);
+    insertIndy(mv, bsm, "post", Type.VOID_TYPE, parameterTypes, impl);
     mv.visitInsn(returnType.getOpcode(IRETURN));
 
     mv.visitLabel(handler);
     mv.visitVarInsn(ASTORE, 0);
-    insertIndy(mv, bsm, "post", parameterTypes, impl);
+    insertIndy(mv, bsm, "post", Type.VOID_TYPE, parameterTypes, impl);
     mv.visitVarInsn(ALOAD, 0);
     mv.visitInsn(ATHROW);
 
@@ -266,9 +261,9 @@ class ProxyGenerator {
     }
   }
 
-  private static void insertIndy(MethodVisitor mv, Handle bsm, String phase, Type[] parameterTypes, Handle impl) {
+  private static void insertIndy(MethodVisitor mv, Handle bsm, String phase, Type returnType, Type[] parameterTypes, Handle impl) {
     loadThisAndArgumentsOnStack(mv, parameterTypes);
-    mv.visitInvokeDynamicInsn(phase, "(Ljava/lang/Object;" + Type.getMethodDescriptor(Type.VOID_TYPE, parameterTypes).substring(1), bsm, impl);
+    mv.visitInvokeDynamicInsn(phase, "(Ljava/lang/Object;" + Type.getMethodDescriptor(returnType, parameterTypes).substring(1), bsm, impl);
   }
 
   private static Stream<Handle> asConstantMH(String internalName, Collection<Metadata.Property> properties) {

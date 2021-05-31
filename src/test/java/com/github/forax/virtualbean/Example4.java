@@ -7,6 +7,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 
+/**
+ * Dynamically register/unregister a logger to log enter and exit of a method
+ */
 public class Example4 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Log { }

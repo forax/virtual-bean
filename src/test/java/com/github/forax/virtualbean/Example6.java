@@ -8,18 +8,18 @@ import java.lang.invoke.MethodType;
 import java.util.Arrays;
 
 import static com.github.forax.virtualbean.BeanFactory.Interceptor.Kind.POST;
+import static java.lang.invoke.MethodHandles.lookup;
 
+/**
+ * Checks if parameter values are between a minim and a maximum.
+ * This is the same behavior as Example5.java but using an interceptor
+ * instead of an advice, which is more efficient.
+ */
 public class Example6 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface BoundChecks {
     int max();
     int min();
-  }
-
-  interface Service {
-    default void foo(@BoundChecks(min = 0, max = 10) int value)  {
-      System.out.println("foo " + value);
-    }
   }
 
   private static int checkBounds(int value, int min, int max) {
@@ -32,15 +32,14 @@ public class Example6 {
   private static final MethodHandle CHECK_BOUNDS;
   static {
     try {
-      CHECK_BOUNDS = MethodHandles.lookup().findStatic(Example6.class, "checkBounds", MethodType.methodType(int.class, int.class, int.class, int.class));
+      CHECK_BOUNDS = lookup().findStatic(Example6.class, "checkBounds", MethodType.methodType(int.class, int.class, int.class, int.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new AssertionError(e);
     }
   }
 
   public static void main(String[] args) {
-    var lookup = MethodHandles.lookup();
-    var beanFactory = new BeanFactory(lookup);
+    var beanFactory = new BeanFactory(lookup());
 
     beanFactory.registerInterceptor(BoundChecks.class, (kind, method, type) -> {
       if (kind == POST) {
@@ -66,6 +65,12 @@ public class Example6 {
       var empty = MethodHandles.empty(type);
       return MethodHandles.filterArguments(empty, 1, filters);
     });
+
+    interface Service {
+      default void foo(@BoundChecks(min = 0, max = 10) int value)  {
+        System.out.println("foo " + value);
+      }
+    }
 
     var service = beanFactory.create(Service.class);
     service.foo(3);

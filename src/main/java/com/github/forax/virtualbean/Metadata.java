@@ -24,8 +24,7 @@ import static java.lang.invoke.MethodType.methodType;
  * <ul>
  *   <li>properties define as pairs of abstract getter and setter,
  *     by example {@code type getX()} and {@code setX(type)} define a property {@code x}.
- *   <li>services define as default methods,
- *     any default is a service.
+ *   <li>services define as methods, abstract or default.
  * </ul>
  *
  * @see BeanFactory
@@ -45,9 +44,9 @@ public record Metadata(Table<Property> properties, Table<Service> services) {
   }
 
   /**
-   * Describe a service wiht a name and a default method.
+   * Describe a service with a name and a method, abstract or default.
    */
-  public record Service(String name, Method method) {}
+  public record Service(boolean isAbstract, String name, Method method) {}
 
   /**
    * An unmodifiable specialized {@link Map} with keys being [@code String} and
@@ -413,7 +412,7 @@ public record Metadata(Table<Property> properties, Table<Service> services) {
 
       var name = method.getName();
       if (method.isDefault()) {
-        var result = serviceMap.put(name, new Service(name, method));
+        var result = serviceMap.put(name, new Service(false, name, method));
         if (result != null) {
           throw new IllegalStateException("duplicate service with the same name " + name);
         }
@@ -448,7 +447,13 @@ public record Metadata(Table<Property> properties, Table<Service> services) {
                    "hashCode()I" -> {
                 continue;
               }
-              default -> throw new IllegalStateException("invalid property or service" + method);
+              default -> {  // abstract method
+                var result = serviceMap.put(name, new Service(true, name, method));
+                if (result != null) {
+                  throw new IllegalStateException("duplicate service with the same name " + name);
+                }
+                continue;
+              }
             }
           }
         }

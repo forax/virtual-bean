@@ -10,6 +10,9 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 
+/**
+ * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
+ */
 public class Example2 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Entity { }

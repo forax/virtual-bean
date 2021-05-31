@@ -7,8 +7,11 @@ import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
 
+import static java.lang.invoke.MethodHandles.constant;
+import static java.lang.invoke.MethodHandles.empty;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
 import static org.junit.jupiter.api.Assertions.*;
@@ -490,5 +493,108 @@ public class BeanFactoryTest {
     };
     assertThrows(IllegalArgumentException.class,
         () -> beanFactory.registerAdvice((Class<? extends Annotation>)(Class<?>)Object.class, advice));
+  }
+
+  @Test
+  public void registerInvocationHandler() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    var box = new Object() {
+      int invokeCalled;
+      Object bean;
+    };
+    factory.registerInvocationHandler(Computation.class, (method, bean, args) -> {
+      assertEquals(Computation.class.getMethod("add", int.class, int.class), method);
+      box.invokeCalled++;
+      box.bean = bean;
+      return ((Integer) args[0]) + (Integer) args[1];
+    });
+    var bean = factory.create(Computation.class);
+    assertAll(
+        () -> assertEquals(42, bean.add(40, 2)),
+        () -> assertEquals(1, box.invokeCalled),
+        () -> assertSame(bean, box.bean)
+    );
+  }
+
+  @Test
+  public void registerImplementor() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerImplementor(Computation.class, (method, type) -> {
+      try {
+        assertEquals(Computation.class.getMethod("add", int.class, int.class), method);
+      } catch (NoSuchMethodException e) {
+        throw new AssertionError(e);
+      }
+      assertEquals(methodType(int.class, Object.class, int.class, int.class), type);
+      var constant = constant(int.class, 42);
+      return MethodHandles.dropArguments(constant, 0, Object.class, int.class, int.class);
+    });
+    var bean = factory.create(Computation.class);
+    assertEquals(42, bean.add(4, 5));
+  }
+
+  @Test
+  public void registerImplementorReturnNull() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerImplementor(Computation.class, (method, type) -> null);
+    var bean = factory.create(Computation.class);
+    assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
+  }
+
+  @Test
+  public void registerImplementorWrongMethodType() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerImplementor(Computation.class, (method, type) -> empty(methodType(void.class)));
+    var bean = factory.create(Computation.class);
+    assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
+  }
+
+  @Test
+  public void noImplementor() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    var bean = factory.create(Computation.class);
+    assertThrows(NoSuchMethodError.class, () -> bean.add(4, 5));
+  }
+
+  @Test
+  public void registerInvocationHandlerTwice() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerInvocationHandler(Computation.class, (method, bean, args) -> fail());
+    assertThrows(IllegalStateException.class, () -> factory.registerInvocationHandler(Computation.class, (method, bean, args) -> fail()));
+  }
+
+  @Test
+  public void registerImplementorTwice() {
+    interface Computation {
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerImplementor(Computation.class, (method, type) -> fail());
+    assertThrows(IllegalStateException.class, () -> factory.registerImplementor(Computation.class, (method, type) -> fail()));
   }
 }

@@ -9,6 +9,11 @@ import java.util.Objects;
 
 import static com.github.forax.virtualbean.BeanFactory.Interceptor.Kind.POST;
 
+/**
+ * Implement an annotation ParametersNonNull that checks if the parameters are null
+ * Same behavior as Example.java but uses an interceptor instead of an advice
+ * which is a little more complex to use but more efficient.
+ */
 public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface ParametersNonNull { }

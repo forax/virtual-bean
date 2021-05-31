@@ -29,19 +29,19 @@ public class ProxyGeneratorTest {
   }
 
   @Test
-  public void createProxyFactoryDefaultMethod() {
+  public void createProxyFactoryDefaultMethod() throws Throwable {
     interface Foo {
       default int m() {
         return 42;
       }
     }
     var factory = ProxyGenerator.createProxyFactory(MethodHandles.lookup(), Foo.class, BSM);
-    var proxy = factory.get();
+    var proxy = (Foo) factory.invoke();
     assertEquals(42, proxy.m());
   }
 
   @Test
-  public void createProxyFactoryVirtualBean() {
+  public void createProxyFactoryVirtualBean() throws Throwable {
     interface Person {
       String getName();
       void setName(String name);
@@ -49,7 +49,7 @@ public class ProxyGeneratorTest {
       void setAge(int age);
     }
     var factory = ProxyGenerator.createProxyFactory(MethodHandles.lookup(), Person.class, BSM);
-    var person = factory.get();
+    var person = (Person) factory.invoke();
     person.setName("Bob");
     person.setAge(42);
     assertEquals("Bob", person.getName());
@@ -57,7 +57,7 @@ public class ProxyGeneratorTest {
   }
 
   @Test
-  public void createProxyFactoryVirtualBeanObjectMethod() {
+  public void createProxyFactoryVirtualBeanObjectMethod() throws Throwable {
     interface Person {
       @SuppressWarnings("unused")
       String getName();
@@ -68,10 +68,10 @@ public class ProxyGeneratorTest {
       void setAge(int age);
     }
     var factory = ProxyGenerator.createProxyFactory(MethodHandles.lookup(), Person.class, BSM);
-    var bob1 = factory.get();
+    var bob1 = (Person) factory.invoke();
     bob1.setName("Bob");
     bob1.setAge(42);
-    var bob2 = factory.get();
+    var bob2 = (Person) factory.invoke();
     bob2.setName("Bob");
     bob2.setAge(42);
     assertEquals(bob1, bob2);

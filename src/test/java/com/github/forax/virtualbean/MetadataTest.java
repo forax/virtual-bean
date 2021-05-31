@@ -30,9 +30,17 @@ public class MetadataTest {
     assertNotNull(metadata);
   }
   @Test
-  public void ofVirtualService() {
+  public void ofVirtualServiceDefaultMethod() {
     interface Service {
       default int foo(int value) { return value; }
+    }
+    var metadata = Metadata.of(Service.class);
+    assertNotNull(metadata);
+  }
+  @Test
+  public void ofVirtualServiceAbstractMethod() {
+    interface Service {
+      int foo(int value);
     }
     var metadata = Metadata.of(Service.class);
     assertNotNull(metadata);
@@ -67,14 +75,6 @@ public class MetadataTest {
       String getAge();
     }
     assertThrows(IllegalStateException.class, () -> Metadata.of(Entity.class));
-  }
-
-  @Test
-  public void ofVirtualServiceNotADefaultMethod() {
-    interface Service {
-      int foo(int value);
-    }
-    assertThrows(IllegalStateException.class, () -> Metadata.of(Service.class));
   }
 
   @Test
@@ -262,10 +262,26 @@ public class MetadataTest {
   }
 
   @Test
+  public void virtualServiceServicesAbstract() {
+    interface Service {
+      int foo(int value);
+      default int bar(int value) { return 0; }
+    }
+    var metadata = Metadata.of(Service.class);
+    var services = metadata.services();
+    assertAll(
+        () -> assertTrue(metadata.properties().isEmpty()),
+        () -> assertEquals(2, services.values().size()),
+        () -> assertEquals("foo", services.value("foo").name()),
+        () -> assertEquals("bar", services.value("bar").name())
+        );
+  }
+
+  @Test
   public void virtualServiceServicesEntrySet() {
     interface Service {
       default String hello(String s) { return  s; }
-      default void empty() { }
+      void empty();
     }
     var metadata = Metadata.of(Service.class);
     var map = metadata.services().entrySet().stream()
@@ -279,7 +295,7 @@ public class MetadataTest {
   public void virtualServiceServicesKetSet() {
     interface Ops {
       default int add(int v1, int v2) { return v1 + v2; }
-      default int sub(int v1, int v2) { return v1 - v2; }
+      int sub(int v1, int v2);
     }
     var metadata = Metadata.of(Ops.class);
     assertEquals(Set.of("add", "sub"), metadata.services().keySet());
@@ -289,7 +305,7 @@ public class MetadataTest {
   public void virtualServiceServicesValues() {
     interface Ops {
       default int add(int v1, int v2) { return v1 + v2; }
-      default int sub(int v1, int v2) { return v1 - v2; }
+      int sub(int v1, int v2);
     }
     var metadata = Metadata.of(Ops.class);
     var set = metadata.services().values().stream()
@@ -302,7 +318,7 @@ public class MetadataTest {
   public void virtualEntityServicesValuesRandomAccess() {
     interface Ops {
       default int add(int v1, int v2) { return v1 + v2; }
-      default int sub(int v1, int v2) { return v1 - v2; }
+      int sub(int v1, int v2);
     }
     var metadata = Metadata.of(Ops.class);
     var list = metadata.services().values();
@@ -318,7 +334,7 @@ public class MetadataTest {
   public void virtualEntityServicesForEach() {
     interface Ops {
       default int add(int v1, int v2) { return v1 + v2; }
-      default int sub(int v1, int v2) { return v1 - v2; }
+      int sub(int v1, int v2);
     }
     var metadata = Metadata.of(Ops.class);
     var set = new HashSet<String>();
@@ -331,7 +347,7 @@ public class MetadataTest {
   public void virtualServiceServicesKeyIndex() {
     interface Ops {
       default int add(int v1, int v2) { return v1 + v2; }
-      default int sub(int v1, int v2) { return v1 - v2; }
+      int sub(int v1, int v2);
     }
     var metadata = Metadata.of(Ops.class);
     var services = metadata.services();
@@ -348,6 +364,7 @@ public class MetadataTest {
   @Test
   public void virtualServiceServicesNotFound() {
     interface FooService {
+      void foo();
       default void bar() {}
     }
     var metadata = Metadata.of(FooService.class);
@@ -378,7 +395,7 @@ public class MetadataTest {
   @Test
   public void virtualServiceServicesGetAndValue() {
     interface Service {
-      default void foo(int value) {}
+      void foo(int value);
       default int parseInt(String s) { return Integer.parseInt(s); }
     }
     var metadata = Metadata.of(Service.class);

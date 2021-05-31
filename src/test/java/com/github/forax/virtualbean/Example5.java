@@ -6,6 +6,11 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
+import static java.lang.invoke.MethodHandles.lookup;
+
+/**
+ * Checks if parameter values are between a minim and a maximum.
+ */
 public class Example5 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface BoundChecks {
@@ -13,15 +18,8 @@ public class Example5 {
     int min();
   }
 
-  interface Service {
-    default void foo(@BoundChecks(min = 0, max = 10) int value)  {
-      System.out.println("foo " + value);
-    }
-  }
-
   public static void main(String[] args) {
-    var lookup = MethodHandles.lookup();
-    var beanFactory = new BeanFactory(lookup);
+    var beanFactory = new BeanFactory(lookup());
 
     beanFactory.registerAdvice(BoundChecks.class, new BeanFactory.Advice() {
       @Override
@@ -45,6 +43,12 @@ public class Example5 {
         System.out.println("post " + Arrays.toString(args));
       }
     });
+
+    interface Service {
+      default void foo(@BoundChecks(min = 0, max = 10) int value)  {
+        System.out.println("foo " + value);
+      }
+    }
 
     var service = beanFactory.create(Service.class);
     service.foo(3);

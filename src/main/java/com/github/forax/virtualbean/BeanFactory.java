@@ -4,6 +4,7 @@ import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandles.Lookup;
@@ -19,10 +20,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.empty;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
@@ -166,6 +167,36 @@ public class BeanFactory {
     }
   }
 
+  @FunctionalInterface
+  public interface Implementor {
+    MethodHandle implement(Method method, MethodType type);
+  }
+
+  private static class InvocationHandlerImpl {
+    private static final MethodHandle INVOKE;
+    static {
+      var lookup = lookup();
+      try {
+        INVOKE = lookup.findVirtual(InvocationHandler.class, "invoke",
+            methodType(Object.class, Method.class, Object.class, Object[].class));
+      } catch(NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+  }
+
+  @FunctionalInterface
+  public interface InvocationHandler {
+    Object invoke(Method method, Object bean, Object[] args) throws Throwable;
+
+    default Implementor asImplementor() {
+      return (method, type) ->
+          insertArguments(InvocationHandlerImpl.INVOKE, 0, this, method)
+            .asCollector(Object[].class, type.parameterCount() - 1)
+            .asType(type);
+    }
+  }
+
   /**
    * A tuple (methodFilter, Interceptor)
    */
@@ -174,7 +205,8 @@ public class BeanFactory {
   private final Lookup lookup;
   private final Object switchPointLock = new Object();
   private SwitchPoint switchPoint;
-  private final HashMap<Class<?>, Supplier<?>> beanFactoryMap = new HashMap<>();
+  private final HashMap<Class<?>, Implementor> implementorMap = new HashMap<>();
+  private final HashMap<Class<?>, MethodHandle> beanFactoryMap = new HashMap<>();
   private final HashMap<Class<?>, List<InterceptorData>> interceptorMap = new HashMap<>();
 
   /**
@@ -300,6 +332,21 @@ public class BeanFactory {
     });
   }
 
+  public void registerInvocationHandler(Class<?> beanType, InvocationHandler invocationHandler) {
+    requireNonNull(beanType);
+    requireNonNull(invocationHandler);
+    registerImplementor(beanType, invocationHandler.asImplementor());
+  }
+
+  public void registerImplementor(Class<?> beanType, Implementor implementor) {
+    requireNonNull(beanType);
+    requireNonNull(implementor);
+    var result = implementorMap.put(beanType, implementor);
+    if (result != null) {
+      throw new IllegalStateException("There already an existing implementor for " + beanType.getName());
+    }
+  }
+
   private List<InterceptorData> getInterceptorData(Class<?> annotationClass) {
     return interceptorMap.getOrDefault(annotationClass, List.of());
   }
@@ -315,20 +362,20 @@ public class BeanFactory {
    * Call site that will be used to dynamically update {@link Interceptor.Kind#PRE} and
    * {@link Interceptor.Kind#POST} interceptors.
    */
-  private final class SwitchableCallSite extends MutableCallSite {
+  private final class InterceptorCallSite extends MutableCallSite {
     private static final MethodHandle INVALIDATE;
     static {
       try {
-        INVALIDATE = lookup().findVirtual(SwitchableCallSite.class, "invalidate", methodType(MethodHandle.class));
+        INVALIDATE = lookup().findVirtual(InterceptorCallSite.class, "invalidate", methodType(MethodHandle.class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
     }
 
-    private final BeanFactory.Interceptor.Kind kind;
+    private final Interceptor.Kind kind;
     private final Method method;
 
-    private SwitchableCallSite(BeanFactory.Interceptor.Kind kind, Method method, MethodType type) {
+    private InterceptorCallSite(Interceptor.Kind kind, Method method, MethodType type) {
       super(type);
       this.kind = kind;
       this.method = method;
@@ -370,7 +417,7 @@ public class BeanFactory {
    * @param type the method type of the resulting method handle
    * @return a method handle combining all the intercepting method handles
    */
-  private MethodHandle target(BeanFactory.Interceptor.Kind kind, Method method, MethodType type) {
+  private MethodHandle target(Interceptor.Kind kind, Method method, MethodType type) {
     var interceptors =
         Stream.of(
             interceptorStream(Arrays.stream(method.getDeclaringClass().getAnnotations()), method),
@@ -386,7 +433,7 @@ public class BeanFactory {
   /**
    * Called by each bean methods to get create a call site before and after the implementation
    * @param lookup the lookup corresponding to the proxy class
-   * @param name either {@code pre} or {@code post}
+   * @param name either {@code pre}, {@code post} or {@code impl}.
    * @param type the method type, the same signature as the intercepted method but
    *             the bean instance is passed as first parameter, typed as {code Object},
    *             and the return type is always {0code void}
@@ -394,14 +441,46 @@ public class BeanFactory {
    * @return a new call site
    */
   private CallSite bsm(MethodHandles.Lookup lookup, String name, MethodType type, MethodHandle intercepted) {
-    var kind = switch(name) {
-      case "pre" -> Interceptor.Kind.PRE;
-      case "post" -> Interceptor.Kind.POST;
-      default -> throw new LinkageError("unknown kind " + name);
-    };
     var mhInfo = lookup.revealDirect(intercepted);
     var method = mhInfo.reflectAs(Method.class, lookup);
-    return new SwitchableCallSite(kind, method, type);
+    return switch(name) {
+      case "pre" -> new InterceptorCallSite(Interceptor.Kind.PRE, method, type);
+      case "post" -> new InterceptorCallSite(Interceptor.Kind.POST, method, type);
+      case "invoke" -> new ConstantCallSite(implementorTarget(method, type));
+      default -> throw new LinkageError("unknown feature " + name);
+    };
+  }
+
+  private static class ImplementorImpl {
+    private static final MethodHandle NO_IMPLEMENTATION;
+    static {
+      var lookup = MethodHandles.lookup();
+      try {
+        NO_IMPLEMENTATION = lookup.findStatic(ImplementorImpl.class, "noImplementation", methodType(void.class, Method.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private static void noImplementation(Method method) {
+      throw new NoSuchMethodError("no implementor for method " + method);
+    }
+  }
+
+  private MethodHandle implementorTarget(Method method, MethodType type) {
+    var implementor = implementorMap.get(method.getDeclaringClass());
+    if (implementor == null) {  // linkage error
+      var mh = ImplementorImpl.NO_IMPLEMENTATION.bindTo(method);
+      return dropArguments(mh, 0, type.parameterList()).asType(type);
+    }
+    var mh = implementor.implement(method, type);
+    if (mh == null) {
+      throw new NullPointerException("implementor of method " + method + " returns null");
+    }
+    if (!type.equals(mh.type())) {
+      throw new WrongMethodTypeException("method " + method + ", invalid implementor " + implementor + " " + mh + " is not compatible with " + type);
+    }
+    return mh;
   }
 
   private Stream<Interceptor> interceptorStream(Stream<Annotation> annotations, Method method) {
@@ -448,14 +527,15 @@ public class BeanFactory {
    *
    * @see Metadata#of(Class)
    */
-  @SuppressWarnings("unchecked")
   public <I> I create(Class<I> type) {
     requireNonNull(type);
     if (!(type.isInterface())) {
       throw new IllegalArgumentException("type " + type.getName() + " should be an interface");
     }
-    var factory = beanFactoryMap.computeIfAbsent(type,
-        t -> ProxyGenerator.createProxyFactory(lookup, t, BSM.bindTo(this)));
-    return (I)factory.get();
+    return type.cast(BeanFactoryCache.create(this, type));
+  }
+
+  MethodHandle beanFactory(Class<?> type) {
+    return beanFactoryMap.computeIfAbsent(type, t -> ProxyGenerator.createProxyFactory(lookup, t, BSM.bindTo(this)));
   }
 }

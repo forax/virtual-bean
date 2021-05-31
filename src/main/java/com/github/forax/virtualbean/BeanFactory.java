@@ -13,6 +13,7 @@ import java.lang.invoke.MutableCallSite;
 import java.lang.invoke.SwitchPoint;
 import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -532,10 +533,17 @@ public class BeanFactory {
     if (!(type.isInterface())) {
       throw new IllegalArgumentException("type " + type.getName() + " should be an interface");
     }
-    return type.cast(BeanFactoryCache.create(this, type));
+    var factory = beanFactory(type);
+    try {
+      return type.cast(factory.invoke());
+    } catch (RuntimeException | Error e) {
+      throw e;
+    } catch (Throwable throwable) {
+      throw new UndeclaredThrowableException(throwable);
+    }
   }
 
-  MethodHandle beanFactory(Class<?> type) {
+  private MethodHandle beanFactory(Class<?> type) {
     return beanFactoryMap.computeIfAbsent(type, t -> ProxyGenerator.createProxyFactory(lookup, t, BSM.bindTo(this)));
   }
 }

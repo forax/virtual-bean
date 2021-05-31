@@ -17,6 +17,7 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -37,10 +38,15 @@ import static java.util.Objects.requireNonNull;
  * A bean factory
  * <ul>
  *   <li>is created with a {@link Lookup},
+ *   <li>can {@link #registerInvocationHandler(Class, InvocationHandler)}  register} {@link InvocationHandler}s and/or
+ *           {@link #registerImplementor(Class, Implementor)}} register} {@link Implementor}s
+ *           to implement abstract {@link Metadata#services() services},
  *   <li>can {@link #registerAdvice(Class, Advice) register} {@link Advice}s and/or
- *           {@link #registerInterceptor(Class, Interceptor)} (Class, Advice) register} {@link Interceptor}s and
- *   <li>can {@link #create(Class) create} bean instances with methods that can be intercepted
- *       by the advices and interceptor registered in the past or in the future.
+ *           {@link #registerInterceptor(Class, Interceptor)} (Class, Advice) register} {@link Interceptor}s
+ *           to execute code around {@link Metadata#services() services} and
+ *           {@link Metadata#properties() properties} and
+ *   <li>can {@link #create(Class) create} bean instances that will use the implementors previously registered
+ *           and interceptors previously registered or registered in the future.
  * </ul>
  */
 public class BeanFactory {
@@ -52,6 +58,66 @@ public class BeanFactory {
           methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class, MethodHandle.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new AssertionError(e);
+    }
+  }
+
+  /**
+   * An implementor is a functional interface that is called to provide an implementation
+   * for one or more abstract services.
+   */
+  @FunctionalInterface
+  public interface Implementor {
+    /**
+     * Returns a method containing the implementation of an abstract method.
+     *
+     * @param method an abstract method to implement
+     * @param type the method type of the method handle to return
+     * @return a method handle is will be used as implementation of the abstract method
+     */
+    MethodHandle implement(Method method, MethodType type);
+  }
+
+  private static class InvocationHandlerImpl {
+    private static final MethodHandle INVOKE;
+    static {
+      var lookup = lookup();
+      try {
+        INVOKE = lookup.findVirtual(InvocationHandler.class, "invoke",
+            methodType(Object.class, Method.class, Object.class, Object[].class));
+      } catch(NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+  }
+
+  /**
+   * A functional interface calls each time one or more abstract services are called.
+   */
+  @FunctionalInterface
+  public interface InvocationHandler {
+    /**
+     * Execute the implementation of an abstract service.
+     *
+     * @param method the abstract method to implement
+     * @param bean the bean instance on which the method is called
+     * @param args the arguments of the method calls
+     * @return the result of the method calls, this value will be ignored if the
+     *         abstract service returns {@code void}
+     * @throws Throwable if an exception need to be thrown
+     */
+    Object invoke(Method method, Object bean, Object[] args) throws Throwable;
+
+    /**
+     * Convert the invocation handler into an implementor.
+     *
+     * @return a new implementation that will call the invocation handler each
+     *         time the abstract service is called.
+     */
+    default Implementor asImplementor() {
+      return (method, type) ->
+          insertArguments(InvocationHandlerImpl.INVOKE, 0, this, method)
+              .asCollector(Object[].class, type.parameterCount() - 1)
+              .asType(type);
     }
   }
 
@@ -168,36 +234,6 @@ public class BeanFactory {
     }
   }
 
-  @FunctionalInterface
-  public interface Implementor {
-    MethodHandle implement(Method method, MethodType type);
-  }
-
-  private static class InvocationHandlerImpl {
-    private static final MethodHandle INVOKE;
-    static {
-      var lookup = lookup();
-      try {
-        INVOKE = lookup.findVirtual(InvocationHandler.class, "invoke",
-            methodType(Object.class, Method.class, Object.class, Object[].class));
-      } catch(NoSuchMethodException | IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-    }
-  }
-
-  @FunctionalInterface
-  public interface InvocationHandler {
-    Object invoke(Method method, Object bean, Object[] args) throws Throwable;
-
-    default Implementor asImplementor() {
-      return (method, type) ->
-          insertArguments(InvocationHandlerImpl.INVOKE, 0, this, method)
-            .asCollector(Object[].class, type.parameterCount() - 1)
-            .asType(type);
-    }
-  }
-
   /**
    * A tuple (methodFilter, Interceptor)
    */
@@ -207,8 +243,8 @@ public class BeanFactory {
   private final Object switchPointLock = new Object();
   private SwitchPoint switchPoint;
   private final HashMap<Class<?>, Implementor> implementorMap = new HashMap<>();
-  private final HashMap<Class<?>, MethodHandle> beanFactoryMap = new HashMap<>();
   private final HashMap<Class<?>, List<InterceptorData>> interceptorMap = new HashMap<>();
+  private final HashMap<Class<?>, MethodHandle> beanFactoryMap = new HashMap<>();
 
   /**
    * Creates a registry with a lookup, all proxies created by this registry will use that lookup,
@@ -219,6 +255,47 @@ public class BeanFactory {
     this.lookup = requireNonNull(lookup);
     synchronized (switchPointLock) {
       switchPoint = new SwitchPoint();
+    }
+  }
+
+  /**
+   * Register an invocation handler for a peculiar annotation.
+   * The invocation handler will be called each time an abstract service annotated by
+   * an annotation of type annotation type is called.
+   *
+   * This call is semantically equivalent to
+   * <pre>
+   *   registerImplementor(annotationType, invocationHandler.asImplementor())
+   * </pre>
+   *
+   * @param annotationType the type of the annotation
+   * @param invocationHandler the invocation handler to call each time an abstract service is called.
+   * @throws IllegalStateException if there is already an invocation handler or an implementor
+   *         registered for that annotation type
+   */
+  public void registerInvocationHandler(Class<? extends Annotation> annotationType, InvocationHandler invocationHandler) {
+    requireNonNull(annotationType);
+    requireNonNull(invocationHandler);
+    registerImplementor(annotationType, invocationHandler.asImplementor());
+  }
+
+  /**
+   * Register an implementor for a peculiar annotation.
+   * The implementor will be called once per abstract service call to return the method handle that will
+   * be called for any subsequent call of the abstract service.
+   *
+   * @param annotationType the type of the annotation
+   * @param implementor the implementor to call
+   * @throws IllegalStateException if there is already an implementor or an invocation handler
+   *         registered for that annotation type
+   */
+  public void registerImplementor(Class<? extends Annotation> annotationType, Implementor implementor) {
+    requireNonNull(annotationType);
+    requireNonNull(implementor);
+    checkAnnotationType(annotationType);
+    var result = implementorMap.put(annotationType, implementor);
+    if (result != null) {
+      throw new IllegalStateException("There already an existing implementor for " + annotationType.getName());
     }
   }
 
@@ -297,6 +374,16 @@ public class BeanFactory {
     requireNonNull(annotationType);
     requireNonNull(methodFilter);
     requireNonNull(interceptor);
+    checkAnnotationType(annotationType);
+    interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(methodFilter, interceptor));
+    invalidateSwitchPoint();
+  }
+
+  /**
+   * Called to verify that the annotation type represent an annotation that exist at runtime
+   * @param annotationType an annotation type
+   */
+  private void checkAnnotationType(Class<? extends Annotation> annotationType) {
     if (!annotationType.isAnnotation()) {
       throw new IllegalArgumentException("annotationType is not an annotation");
     }
@@ -304,8 +391,6 @@ public class BeanFactory {
     if (retention == null || retention.value() != RetentionPolicy.RUNTIME) {
       throw new IllegalArgumentException("@Retention of  " + annotationType.getName() + " should be RetentionPolicy.RUNTIME)");
     }
-    interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(methodFilter, interceptor));
-    invalidateSwitchPoint();
   }
 
   /**
@@ -333,23 +418,8 @@ public class BeanFactory {
     });
   }
 
-  public void registerInvocationHandler(Class<?> beanType, InvocationHandler invocationHandler) {
-    requireNonNull(beanType);
-    requireNonNull(invocationHandler);
-    registerImplementor(beanType, invocationHandler.asImplementor());
-  }
-
-  public void registerImplementor(Class<?> beanType, Implementor implementor) {
-    requireNonNull(beanType);
-    requireNonNull(implementor);
-    var result = implementorMap.put(beanType, implementor);
-    if (result != null) {
-      throw new IllegalStateException("There already an existing implementor for " + beanType.getName());
-    }
-  }
-
-  private List<InterceptorData> getInterceptorData(Class<?> annotationClass) {
-    return interceptorMap.getOrDefault(annotationClass, List.of());
+  private Stream<InterceptorData> getInterceptorDataStream(Class<?> annotationClass) {
+    return interceptorMap.getOrDefault(annotationClass, List.of()).stream();
   }
 
   private void invalidateSwitchPoint() {
@@ -380,7 +450,7 @@ public class BeanFactory {
       super(type);
       this.kind = kind;
       this.method = method;
-      setTarget(prepare(target(kind, method, type)));
+      setTarget(prepare(interceptorTarget(kind, method, type)));
     }
 
     /**
@@ -388,7 +458,7 @@ public class BeanFactory {
      * @return all the interceptors to called flatten as one method handle
      */
     private MethodHandle invalidate() {
-      var target = target(kind, method, type());
+      var target = interceptorTarget(kind, method, type());
       setTarget(prepare(target));
       return target;
     }
@@ -418,17 +488,77 @@ public class BeanFactory {
    * @param type the method type of the resulting method handle
    * @return a method handle combining all the intercepting method handles
    */
-  private MethodHandle target(Interceptor.Kind kind, Method method, MethodType type) {
+  private MethodHandle interceptorTarget(Interceptor.Kind kind, Method method, MethodType type) {
     var interceptors =
         Stream.of(
             interceptorStream(Arrays.stream(method.getDeclaringClass().getAnnotations()), method),
             interceptorStream(Arrays.stream(method.getAnnotations()), method),
             interceptorStream(Arrays.stream(method.getParameterAnnotations()).flatMap(Arrays::stream), method)
-        ).flatMap(s -> s).collect(Collectors.toSet());
+        ).flatMap(s -> s).collect(Collectors.toCollection(LinkedHashSet::new));
 
     // System.err.println("method " + kind + " " + method.getName() + " interceptors " + interceptors);
 
     return flattenInterceptors(interceptors, method, kind, type);
+  }
+
+  private Stream<Implementor> getImplementorStream(Class<?> annotationClass) {
+    return Stream.ofNullable(implementorMap.get(annotationClass));
+  }
+
+  /**
+   * Class holder pattern used when a NoSuchMethodError needs to be reported because there is no
+   * implementor of an abstract service
+   */
+  private static class ImplementorImpl {
+    private static final MethodHandle NO_IMPLEMENTATION;
+    static {
+      var lookup = MethodHandles.lookup();
+      try {
+        NO_IMPLEMENTATION = lookup.findStatic(ImplementorImpl.class, "noImplementation", methodType(void.class, Method.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private static void noImplementation(Method method) {
+      throw new NoSuchMethodError("no implementor for method " + method);
+    }
+  }
+
+  /**
+   * Gather all implementors for an abstract service, hope there is only one and
+   * call it to get the method handle to install.
+   *
+   * @param method the method to implement
+   * @param type the method type of the resulting method handle
+   * @return a method handle to install as implementation of the abstract service
+   */
+  private MethodHandle implementorTarget(Method method, MethodType type) {
+    var implementors =
+        Stream.of(
+          implementorStream(Arrays.stream(method.getDeclaringClass().getAnnotations())),
+          implementorStream(Arrays.stream(method.getAnnotations())))
+            .flatMap(s -> s)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+    //System.err.println("method " + method.getName() + " implementors " + implementors);
+
+    if (implementors.isEmpty()) {
+      var mh = ImplementorImpl.NO_IMPLEMENTATION.bindTo(method);
+      return dropArguments(mh, 0, type.parameterList()).asType(type);
+    }
+    if (implementors.size() > 1) {
+      throw new IllegalStateException("multiple implementors " + implementors + " available for " + method);
+    }
+    var implementor = implementors.iterator().next();
+    var mh = implementor.implement(method, type);
+    if (mh == null) {
+      throw new NullPointerException("implementor of method " + method + " returns null");
+    }
+    if (!type.equals(mh.type())) {
+      throw new WrongMethodTypeException("method " + method + ", invalid implementor " + implementor + " " + mh + " is not compatible with " + type);
+    }
+    return mh;
   }
 
   /**
@@ -452,42 +582,14 @@ public class BeanFactory {
     };
   }
 
-  private static class ImplementorImpl {
-    private static final MethodHandle NO_IMPLEMENTATION;
-    static {
-      var lookup = MethodHandles.lookup();
-      try {
-        NO_IMPLEMENTATION = lookup.findStatic(ImplementorImpl.class, "noImplementation", methodType(void.class, Method.class));
-      } catch (NoSuchMethodException | IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-    }
-
-    private static void noImplementation(Method method) {
-      throw new NoSuchMethodError("no implementor for method " + method);
-    }
-  }
-
-  private MethodHandle implementorTarget(Method method, MethodType type) {
-    var implementor = implementorMap.get(method.getDeclaringClass());
-    if (implementor == null) {  // linkage error
-      var mh = ImplementorImpl.NO_IMPLEMENTATION.bindTo(method);
-      return dropArguments(mh, 0, type.parameterList()).asType(type);
-    }
-    var mh = implementor.implement(method, type);
-    if (mh == null) {
-      throw new NullPointerException("implementor of method " + method + " returns null");
-    }
-    if (!type.equals(mh.type())) {
-      throw new WrongMethodTypeException("method " + method + ", invalid implementor " + implementor + " " + mh + " is not compatible with " + type);
-    }
-    return mh;
+  private Stream<Implementor> implementorStream(Stream<Annotation> annotations) {
+    return annotations.flatMap(annotation -> getImplementorStream(annotation.annotationType()));
   }
 
   private Stream<Interceptor> interceptorStream(Stream<Annotation> annotations, Method method) {
     return annotations
         .flatMap(annotation ->
-            getInterceptorData(annotation.annotationType()).stream()
+            getInterceptorDataStream(annotation.annotationType())
                 .filter(interceptorData -> interceptorData.methodFilter.test(method))
                 .map(InterceptorData::interceptor)
         );

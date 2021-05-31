@@ -495,9 +495,13 @@ public class BeanFactoryTest {
         () -> beanFactory.registerAdvice((Class<? extends Annotation>)(Class<?>)Object.class, advice));
   }
 
+  @Retention(RetentionPolicy.RUNTIME)
+  private @interface ProvideImplementation {}
+
   @Test
   public void registerInvocationHandler() {
     interface Computation {
+      @ProvideImplementation
       int add(int v1, int v2);
     }
 
@@ -506,7 +510,7 @@ public class BeanFactoryTest {
       int invokeCalled;
       Object bean;
     };
-    factory.registerInvocationHandler(Computation.class, (method, bean, args) -> {
+    factory.registerInvocationHandler(ProvideImplementation.class, (method, bean, args) -> {
       assertEquals(Computation.class.getMethod("add", int.class, int.class), method);
       box.invokeCalled++;
       box.bean = bean;
@@ -522,12 +526,13 @@ public class BeanFactoryTest {
 
   @Test
   public void registerImplementor() {
+    @ProvideImplementation
     interface Computation {
       int add(int v1, int v2);
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerImplementor(Computation.class, (method, type) -> {
+    factory.registerImplementor(ProvideImplementation.class, (method, type) -> {
       try {
         assertEquals(Computation.class.getMethod("add", int.class, int.class), method);
       } catch (NoSuchMethodException e) {
@@ -544,11 +549,12 @@ public class BeanFactoryTest {
   @Test
   public void registerImplementorReturnNull() {
     interface Computation {
+      @ProvideImplementation
       int add(int v1, int v2);
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerImplementor(Computation.class, (method, type) -> null);
+    factory.registerImplementor(ProvideImplementation.class, (method, type) -> null);
     var bean = factory.create(Computation.class);
     assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
   }
@@ -556,11 +562,12 @@ public class BeanFactoryTest {
   @Test
   public void registerImplementorWrongMethodType() {
     interface Computation {
+      @ProvideImplementation
       int add(int v1, int v2);
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerImplementor(Computation.class, (method, type) -> empty(methodType(void.class)));
+    factory.registerImplementor(ProvideImplementation.class, (method, type) -> empty(methodType(void.class)));
     var bean = factory.create(Computation.class);
     assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
   }
@@ -578,13 +585,9 @@ public class BeanFactoryTest {
 
   @Test
   public void registerInvocationHandlerTwice() {
-    interface Computation {
-      int add(int v1, int v2);
-    }
-
     var factory = new BeanFactory(lookup());
-    factory.registerInvocationHandler(Computation.class, (method, bean, args) -> fail());
-    assertThrows(IllegalStateException.class, () -> factory.registerInvocationHandler(Computation.class, (method, bean, args) -> fail()));
+    factory.registerInvocationHandler(ProvideImplementation.class, (method, bean, args) -> fail());
+    assertThrows(IllegalStateException.class, () -> factory.registerInvocationHandler(ProvideImplementation.class, (method, bean, args) -> fail()));
   }
 
   @Test
@@ -594,7 +597,38 @@ public class BeanFactoryTest {
     }
 
     var factory = new BeanFactory(lookup());
-    factory.registerImplementor(Computation.class, (method, type) -> fail());
-    assertThrows(IllegalStateException.class, () -> factory.registerImplementor(Computation.class, (method, type) -> fail()));
+    factory.registerImplementor(ProvideImplementation.class, (method, type) -> fail());
+    assertThrows(IllegalStateException.class, () -> factory.registerImplementor(ProvideImplementation.class, (method, type) -> fail()));
+  }
+
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface ProvideImplementation2 { }
+
+  @Test
+  public void registerInvocationHandlesTwoAnnotations() {
+    interface Computation {
+      @ProvideImplementation @ProvideImplementation2
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerInvocationHandler(ProvideImplementation.class, (method, bean, args) -> fail());
+    factory.registerInvocationHandler(ProvideImplementation2.class, (method, bean, args) -> fail());
+    var bean = factory.create(Computation.class);
+    assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
+  }
+
+  @Test
+  public void registerImplementorsTwoAnnotations() {
+    interface Computation {
+      @ProvideImplementation @ProvideImplementation2
+      int add(int v1, int v2);
+    }
+
+    var factory = new BeanFactory(lookup());
+    factory.registerImplementor(ProvideImplementation.class, (method, type) -> fail());
+    factory.registerImplementor(ProvideImplementation2.class, (method, type) -> fail());
+    var bean = factory.create(Computation.class);
+    assertThrows(BootstrapMethodError.class, () -> bean.add(4, 5));
   }
 }

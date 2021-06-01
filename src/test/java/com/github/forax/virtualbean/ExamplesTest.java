@@ -33,4 +33,14 @@ public class ExamplesTest {
   public void example6() {
     Assertions.assertThrows(IllegalArgumentException.class, () -> Example6.main(new String[0]));
   }
+
+  @Test
+  public void example7() {
+    Example7.main(new String[0]);
+  }
+
+  @Test
+  public void example8() {
+    Example8.main(new String[0]);
+  }
 }

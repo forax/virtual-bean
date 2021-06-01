@@ -44,6 +44,7 @@ public class Example5 {
       }
     });
 
+
     interface Service {
       default void foo(@BoundChecks(min = 0, max = 10) int value)  {
         System.out.println("foo " + value);

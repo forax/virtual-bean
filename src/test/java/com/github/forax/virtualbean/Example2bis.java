@@ -7,18 +7,47 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
  */
-public class Example2 {
+public class Example2bis {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Entity { }
 
+  @Entity
+  interface UserBean {
+    String getName();
+    void setName(String name);
+    String getEmail();
+    void setEmail(String name);
+  }
+
   @Retention(RetentionPolicy.RUNTIME)
   @interface Transactional { }
+
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Inject { }
+
+  interface UserManager {
+    @Transactional
+    default UserBean createUser(String name, String email) {
+      var user = beanFactory().create(UserBean.class);
+      user.setName(name);
+      user.setEmail(email);
+
+      EntityManager.current().update();
+      return user;
+    }
+
+    @Inject
+    BeanFactory beanFactory();
+  }
 
   private static final ThreadLocal<EntityManager> ENTITY_MANAGERS = new ThreadLocal<>();
 
@@ -33,9 +62,22 @@ public class Example2 {
     }
   }
 
+  record Registry(Map<Class<?>, Supplier<?>> map) {
+    public <T> void register(Class<T> type, Supplier<? extends T> supplier) {
+      map.put(type, supplier);
+    }
+    public <T> T lookup(Class<T> type) {
+      return type.cast(map.get(type).get());
+    }
+  }
+
   public static void main(String[] args) {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
+
+    var registry = new Registry(new HashMap<>());
+    registry.register(BeanFactory.class, () -> beanFactory);
+    beanFactory.registerInvocationHandler(Inject.class, (method, bean, args1) -> registry.lookup(method.getReturnType()));
 
     beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
       @Override
@@ -64,28 +106,8 @@ public class Example2 {
     });
 
 
-    @Entity
-    interface UserBean {
-      String getName();
-      void setName(String name);
-      String getEmail();
-      void setEmail(String name);
-    }
-
-    interface UserManager {
-      @Transactional
-      default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-        var user = beanFactory.create(UserBean.class);
-        user.setName(name);
-        user.setEmail(email);
-
-        EntityManager.current().update();
-        return user;
-      }
-    }
-
     var userManager = beanFactory.create(UserManager.class);
-    var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
+    var user = userManager.createUser("Duke", "duke@openjdk.java.net");
     System.out.println("user " + user.getName() + " " + user.getEmail());
   }
 }

@@ -35,6 +35,7 @@ public class Example8 {
       }
     });
 
+
     interface HelloManager {
       @Timed
       default void sayHello(String text) {

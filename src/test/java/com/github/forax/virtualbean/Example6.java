@@ -66,6 +66,7 @@ public class Example6 {
       return MethodHandles.filterArguments(empty, 1, filters);
     });
 
+
     interface Service {
       default void foo(@BoundChecks(min = 0, max = 10) int value)  {
         System.out.println("foo " + value);

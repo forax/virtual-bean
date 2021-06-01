@@ -51,6 +51,7 @@ public class Example7 {
       }
     });
 
+
     interface UserBean extends ActiveBean<UserBean> {
       @EventEmitter
       void setLogin(String login);

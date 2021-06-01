@@ -14,13 +14,6 @@ public class Example4 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Log { }
 
-  interface HelloManager {
-    @Log
-    default void sayHello(String text) {
-      System.out.println("hello " + text);
-    }
-  }
-
   public static void main(String[] args) {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
@@ -36,6 +29,14 @@ public class Example4 {
         System.out.println("exit " + method);
       }
     }.asInterceptor();
+
+
+    interface HelloManager {
+      @Log
+      default void sayHello(String text) {
+        System.out.println("hello " + text);
+      }
+    }
 
     var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("no log");

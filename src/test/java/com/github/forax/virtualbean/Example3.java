@@ -18,14 +18,6 @@ public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface ParametersNonNull { }
 
-  interface HelloManager {
-    @ParametersNonNull
-    default void sayHello(String text)  {
-      System.out.println("hello " + text);
-    }
-  }
-
-
   private static final MethodHandle REQUIRE_NON_NULL;
   static {
     try {
@@ -57,6 +49,14 @@ public class Example3 {
       var empty = MethodHandles.empty(type);
       return MethodHandles.filterArguments(empty, 1, filters);
     });
+
+
+    interface HelloManager {
+      @ParametersNonNull
+      default void sayHello(String text)  {
+        System.out.println("hello " + text);
+      }
+    }
 
     var helloManager = beanFactory.create(HelloManager.class);
     helloManager.sayHello("Bob");

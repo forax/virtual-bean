@@ -12,6 +12,9 @@ import java.util.function.Supplier;
 /**
  * Inject the local time. The local time implementation is managed by an injector
  * that associate a type to the local time implementation factory (a supplier).
+ *
+ * Compared to Guice, Spring or CDI, the injection is not done at the time the
+ * bean is instantiated but later when the method annotated with @Inject is called.
  */
 public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)

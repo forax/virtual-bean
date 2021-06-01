@@ -9,6 +9,13 @@ The `BeanFactory` API cleanly decouples the virtual bean definition,
 from the semantics  of the annotation defined in terms of implementors and
 interceptors.
 
+This class offers capabilities similar to Spring, CDI or Guice but
+decomposes the concept of interceptor into 2 different parts:
+_interceptors_ that can be composed and _implementors_ that are unique (thus non composable) to an abstract method.
+In order to be composable, interceptors are less powerful than classical interceptors,
+they return {@code void}, they can not change the arguments or the return value of a call, and
+do not explicitly call each others.
+
 Conceptually, there are only three operations:
 - `create(interface)` takes a virtual bean (the interface) and returns an instance
   of that interface with all the property initialize to their default values.
@@ -28,8 +35,8 @@ but are less performant because their API requires parameters to be boxed in an 
 Also _interceptors_ can be unregistered using `unregisterInterceptor(annotation, interceptor)`
 allowing to dynamically add/remove pre and post snippet of codes.
 
-The beauty of all of this is that the separation of concern between
-the virtual bean, and the _implementor_ / _interceptor_ does not hinder performance,
+The beauty of all of this is that the clean separation between
+the virtual bean, _implementors_ and _interceptors_ does not hinder performance,
 but actually helps
 - the implementation is fully lazy, if a method of the virtual bean is never
   called the runtime cost is zero
@@ -37,8 +44,6 @@ but actually helps
   and fully inlined
 - if there are several interceptors for a call, there are called one after the
   other, and not one on top of the others, so no gigantic stracktraces
-- speaking of stacktraces, all the plumbing is done internally using method handles
-  so it does not appear in stacktraces at all.
 
 Enough talk, let see some examples.  
 

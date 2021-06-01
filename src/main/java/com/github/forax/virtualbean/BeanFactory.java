@@ -39,6 +39,14 @@ import static java.util.Objects.requireNonNull;
  * the interface pass as a parameter. The methods can be {@link Implementor implemented}
  * if abstract or {@link Interceptor intercepted} at runtime based on annotations.
  *
+ * This class offers capabilities similar to Spring, CDI or Guice but
+ * decomposes the concept of interceptor into 2 different parts:
+ * _interceptors_ that can be composed and implementors that are unique (thus non composable) to an abstract method.
+ * In order to be composable, interceptors are less powerful than classical interceptors,
+ * they return {@code void}, they can not change the arguments or the return value of a call, and
+ * do not explicitly calls each others, there are not chained but are called one after the other
+ * (thus no long stacktraces).
+ *
  * The implementation class is generated in the same package as the {@code lookupClass}
  * of the {@link Lookup} object passed to the constructor. The generated classes also
  * implement {@link #equals(Object)}, {@link #hashCode()} and {@link #toString()}.

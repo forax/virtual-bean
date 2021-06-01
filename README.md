@@ -167,27 +167,23 @@ The full code is available here: https://github.com/forax/virtual-bean/blob/mast
 ## Invocation handler and object injection
 
 A BeanFactory also provides implementations of abstract method by registering _implementors_.
-We can use that to implement dependency injection, of value or factory of values, supplier in Java.
+We can use that to implement a simple dependency injection.
 
-First we create an annotation `@Inject` and a registry able to register a supplier for an interface
-and call that supplier when asked for an instance of the interface.
+First we create an annotation `@Inject` and an injector that provide a way to bind a supplier
+of a type to that type
 ```java
   @Retention(RetentionPolicy.RUNTIME)
   @interface Inject { }
 
-  static class Registry {
+  static class Injector {
     private final HashMap<Class<?>, Supplier<?>> map = new HashMap<>();
 
-    public <T> void register(Class<T> type, Supplier<? extends T> supplier) {
-      map.put(type, supplier);
-    }
-    public <T> T lookup(Class<T> type) {
-      return type.cast(map.get(type).get());
-    }
+    public <T> void bind(Class<T> type, Supplier<? extends T> supplier) { map.put(type, supplier);  }
+    public <T> T getInstance(Class<T> type) { return type.cast(map.get(type).get()); }
   }
 ```
 
-The parameter types (the `T`) are only here to ensure that the supplier provide an implementation of the interface.
+The parameter types (the `T`) are only here to ensure that the type of the supplier is a subtype of the type to bind.
 Then we register an _invocation handler_ that will be called when the abstract method annotated by `Inject` is called.`
 
 Here we register a supplier of `LocalTime` that will be called each time the methode `now()` of
@@ -198,9 +194,9 @@ the interface `Clock` is called.
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    var registry = new Registry();
-    beanFactory.registerInvocationHandler(Inject.class,
-        (method, bean, args1) -> registry.lookup(method.getReturnType()));
+    var injector = new Injector();
+    beanFactory.registerInvocationHandler(Inject.class
+        (method, bean, args1) -> injector.getInstance(method.getReturnType()));
 
     interface Clock {
       @Inject
@@ -208,13 +204,13 @@ the interface `Clock` is called.
     }
 
     var clock = beanFactory.create(Clock.class);
-    registry.register(LocalTime.class, LocalTime::now);
+    injector.bind(LocalTime.class, LocalTime::now);
     System.out.println(clock.now());
     System.out.println(clock.now());
   }
 ```
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example4.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example3.java
 
 
 ## Dynamically add/remove an interceptor

@@ -183,8 +183,12 @@ of a type to that type
   static class Injector {
     private final HashMap<Class<?>, Supplier<?>> map = new HashMap<>();
 
-    public <T> void bind(Class<T> type, Supplier<? extends T> supplier) { map.put(type, supplier);  }
-    public <T> T getInstance(Class<T> type) { return type.cast(map.get(type).get()); }
+    public <T> void bind(Class<T> type, Supplier<? extends T> supplier) {
+      map.put(type, supplier);
+    }
+    public <T> T getInstance(Class<T> type) {
+      return type.cast(map.get(type).get());
+    }
   }
 ```
 

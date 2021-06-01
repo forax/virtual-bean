@@ -4,28 +4,27 @@ import com.github.forax.virtualbean.BeanFactory;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.util.Objects;
-
-import static com.github.forax.virtualbean.BeanFactory.Interceptor.Kind.POST;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 
 /**
- * Implement an annotation ParametersNonNull that checks if the parameters are null
- * Same behavior as Example.java but uses an interceptor instead of an advice
- * which is a little more complex to use but more efficient.
+ * Inject a supplier from a registry
  */
 public class Example3 {
   @Retention(RetentionPolicy.RUNTIME)
-  @interface ParametersNonNull { }
+  @interface Inject { }
 
-  private static final MethodHandle REQUIRE_NON_NULL;
-  static {
-    try {
-      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class, "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
-    } catch (NoSuchMethodException | IllegalAccessException e) {
-      throw new AssertionError(e);
+  static class Registry {
+    private final HashMap<Class<?>, Supplier<?>> map = new HashMap<>();
+
+    public <T> void register(Class<T> type, Supplier<? extends T> supplier) {
+      map.put(type, supplier);
+    }
+    public <T> T lookup(Class<T> type) {
+      return type.cast(map.get(type).get());
     }
   }
 
@@ -33,35 +32,17 @@ public class Example3 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerInterceptor(ParametersNonNull.class, (kind, method, type) -> {
-      if (kind == POST) {
-        return null;
-      }
-      var parameterTypes = method.getParameterTypes();
-      var filters = new MethodHandle[parameterTypes.length];
-      for(var i = 0; i < parameterTypes.length; i++) {
-        var parameterType = parameterTypes[i];
-        if (parameterType.isPrimitive()) {
-          continue;
-        }
-        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1, "argument " + i + " of " + method + " is null");
-        var filter = requireNonNull.asType(MethodType.methodType(parameterType, parameterType));
-        filters[i] = filter;
-      }
-      var empty = MethodHandles.empty(type);
-      return MethodHandles.filterArguments(empty, 1, filters);
-    });
+    var registry = new Registry();
+    beanFactory.registerInvocationHandler(Inject.class, (method, bean, args1) -> registry.lookup(method.getReturnType()));
 
-
-    interface HelloManager {
-      @ParametersNonNull
-      default void sayHello(String text)  {
-        System.out.println("hello " + text);
-      }
+    interface Clock {
+      @Inject
+      LocalTime now();
     }
 
-    var helloManager = beanFactory.create(HelloManager.class);
-    helloManager.sayHello("Bob");
-    helloManager.sayHello(null);
+    var clock = beanFactory.create(Clock.class);
+    registry.register(LocalTime.class, LocalTime::now);
+    System.out.println(clock.now());
+    System.out.println(clock.now());
   }
 }

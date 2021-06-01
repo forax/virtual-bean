@@ -2,36 +2,42 @@
 A simple API to compose bean behavior based on annotations.
 
 A virtual bean is an interface that describes
-- properties as getter and setter
-- services as default method
+- _properties_ as getters and setters
+- _services_ as abstract or default methods
 
 The `BeanFactory` API cleanly decouples the virtual bean definition,
-from the semantics  of the annotation defined in terms of advices and
-interceptors that can be added and removed dynamically.
+from the semantics  of the annotation defined in terms of implementors and
+interceptors.
 
-Conceptually, there are only two operations:
+Conceptually, there are only three operations:
 - `create(interface)` takes a virtual bean (the interface) and returns an instance
   of that interface with all the property initialize to their default values.
-- `registerAdvice(annotation, filter, advice)` adds an advice (a method run before,
-  and a method run after) to all methods that defines the annotation
-  and for which the filter is true.
   
-In fact, an advice defines two method handles that will be run before
-and after a virtual bean methods. The method
-`registerInterceptor(annotation, filter, interceptor)` which is used
-by `registerAdvice()` allows to have a better control on those method
-handles and can also be unregistered with
-`unregisterInterceptor(annotation, interceptor)`.
+- `registerImplementor(annotation, implementor)`that registers a lambda that will be called
+   to ask for an implementation (a method handle) for any abstract methods annotated
+   by the annotation
+  
+- `registerInterceptor(annotation, filter, interceptor)` that register a lambda that
+   will be called to get method handle that should run before (**PRE**) and ater (**POST**)
+   a method call.
+  
+There are several helper methods that allows to register `InvocationHandler`s and `Advice`s
+instead of respectively `Implementors` and `Interceptor` that have an easier semantics
+but are less performant because their API requires parameters to be boxed in an array.
+
+Also _interceptors_ can be unregistered using `unregisterInterceptor(annotation, interceptor)`
+allowing to dynamically add/remove pre and post snippet of codes.
 
 The beauty of all of this is that the separation of concern between
-the virtual bean, and the advice does not hinder performance, but actually helps
+the virtual bean, and the _implementor_ / _interceptor_ does not hinder performance,
+but actually helps
 - the implementation is fully lazy, if a method of the virtual bean is never
   called the runtime cost is zero
-- all the advices are resolved once per call (apart in case of unregistering)  
+- _implementors_, _invocation handlers_, _interceptors_ and _advices_ are resolved once per call  
   and fully inlined
 - if there are several interceptors for a call, there are called one after the
   other, and not one on top of the others, so no gigantic stracktraces
-- speaking of stacktraces, all the plumbing is done by method handles
+- speaking of stacktraces, all the plumbing is done internally using method handles
   so it does not appear in stacktraces at all.
 
 Enough talk, let see some examples.  
@@ -85,117 +91,17 @@ So we register an advice for the annotation class `ParametersNonNull` that calls
 
 If you run this code, the last call to `sayHello` will throw a `NullPointException` because the argument is null. 
 It's not the most efficient code tho, mostly because for each call, arguments are boxed in an array.
-The example 3, below, explains how to alleviate that issue.
+The example below, explains how to alleviate that issue.
 
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example.java
 
 
-## A dirty set example
-
-A dirty set is the set of all bean instances that have been modified during
-a transaction thus should be updated in the database at the end of that transaction.
-
-We can write easily such behavior with the `BeanFactory` API.
-First, we define an annotation `Entity` and a virtual bean with 2 properties
-`name` and `email`. 
-
-```java
-@Retention(RetentionPolicy.RUNTIME)
-@interface Entity { }
-
-@Entity
-interface UserBean {
-  String getName();
-  void setName(String name);
-  String getEmail();
-  void setEmail(String name);
-}
-```
-
-then we define an annotation `Transactional` and a service `UserManager`
-```java
-@Retention(RetentionPolicy.RUNTIME)
-@interface Transactional { }
-
-interface UserManager {
-  @Transactional
-  default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-    var user = beanFactory.create(UserBean.class);
-    user.setName(name);
-    user.setEmail(email);
-    EntityManager.current().update();
-    return user;
-  }
-}
-```
-
-We also need a thread local entity manager that will store the dirty set,
-here defined as a record, because it's just fewer keystrokes 
-
-```java
-  private static final ThreadLocal<EntityManager> ENTITY_MANAGERS =
-        new ThreadLocal<>();
-
-  record EntityManager(Set<Object> dirtySet) {
-    public static EntityManager current() {
-      return ENTITY_MANAGERS.get();
-    }
-
-    public void update() {
-      System.out.println("dirtySet " + dirtySet);
-      dirtySet.clear();
-    }
-  }
-```
-
-We can now define the semantics of `@Entity` that tracks the calls to the setters
-and store the corresponding in the _dirty set_ of the entity manager and
-`@Transactional` that creates an entity manager for the duration of the method.
-
-```java
-  public static void main(String[] args) {
-    var lookup = MethodHandles.lookup();
-    var beanFactory = new BeanFactory(lookup);
-
-    beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
-      public void pre(Method method, Object bean, Object[] args) { }
-
-      public void post(Method method, Object bean, Object[] args) {
-        var entityManager = EntityManager.current();
-        if (entityManager != null) {
-          entityManager.dirtySet.add(bean);
-        }
-      }
-    });
-    beanFactory.registerAdvice(Transactional.class, new Advice() {
-      public void pre(Method method, Object bean, Object[] args) {
-        var dirtySet = Collections.newSetFromMap(new IdentityHashMap<>());
-        var entityManager = new EntityManager(dirtySet);
-        ENTITY_MANAGERS.set(entityManager);
-      }
-
-      public void post(Method method, Object bean, Object[] args) {
-        ENTITY_MANAGERS.remove();
-      }
-    });
-    
-    var userManager = beanFactory.create(UserManager.class);
-    var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
-    System.out.println("user " + user.getName() + " " + user.getEmail());
-  }
-```
-
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example2.java
-
-
 ## All your parameter are belong to us (2)
 
-The code above that does the runtime check using an advice can be improved
-to be more efficient at the price of being a little more cryptic using
-the package `java.lang.invoke`.
+We can improve the efficiency of the code above by using an _interceptor_ instead of an _advice_.
+But this came at the price of having to figure out how the `java.lang.invoke` API really works.
 
-An advice box all the arguments in an array of objects, we can avoid that by using an interceptor.
-So the start of the code is the same, we create an annotation and using it on a method of a virtual bean,
+The start of the code is the same, we create an annotation and using it on a method of a virtual bean,
 but we also create a method handle (a function pointer) on `Objects.requireNonNull`
 ```java
   @Retention(RetentionPolicy.RUNTIME)
@@ -218,7 +124,7 @@ but we also create a method handle (a function pointer) on `Objects.requireNonNu
   }
 ```
 
-We register an interceptor that will be called only once per method call and return a method handle that
+We register an _interceptor_ that will be called only once per method call and return a method handle that
 will check that if a parameter is an object, the method handle corresponding to `requireNonNull` must be called.
 ```java
   public static void main(String[] args) {
@@ -250,9 +156,62 @@ will check that if a parameter is an object, the method handle corresponding to 
   }
 ```
 
-The behavior of this code is identical, but it performs better because arguments are not boxed anymore.
+The behavior of this code is identical as the previous solution,
+but it performs better because method arguments are not boxed anymore.
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example3.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example2.java
+
+
+## Invocation handler and object injection
+
+A BeanFactory is also able to provide an implementation of abstract method by registering
+an _implementor_.
+
+First we create an annotation `@Inject` and a registry able to register a supplier for an interface
+and call that supplier when asked for an instance of the interface.
+```java
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Inject { }
+
+  static class Registry {
+    private final HashMap<Class<?>, Supplier<?>> map = new HashMap<>();
+
+    public <T> void register(Class<T> type, Supplier<? extends T> supplier) {
+      map.put(type, supplier);
+    }
+    public <T> T lookup(Class<T> type) {
+      return type.cast(map.get(type).get());
+    }
+  }
+```
+
+The parameter types (the `T`) are only here to ensure that the supplier provide an implementation of the interface.
+Then we register an _invocation handler_ that will be called when the abstract method annotated by `Inject` is called.`
+
+Here we register a supplier of `LocalTime` that will be called each time the methode `now()` of
+the interface `Clock` is called.
+
+```java
+  public static void main(String[] args) {
+    var lookup = MethodHandles.lookup();
+    var beanFactory = new BeanFactory(lookup);
+
+    var registry = new Registry();
+    beanFactory.registerInvocationHandler(Inject.class, (method, bean, args1) -> registry.lookup(method.getReturnType()));
+
+    interface Clock {
+      @Inject
+      LocalTime now();
+    }
+
+    var clock = beanFactory.create(Clock.class);
+    registry.register(LocalTime.class, LocalTime::now);
+    System.out.println(clock.now());
+    System.out.println(clock.now());
+  }
+```
+
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example4.java
 
 
 ## Dynamically add/remove an interceptor
@@ -304,3 +263,8 @@ Then we can register or unregister the logging interceptor
 ```
 
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example4.java
+
+
+## There are more ...
+
+There are more examples, all available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example

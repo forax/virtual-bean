@@ -20,7 +20,7 @@ import java.util.function.Supplier;
  * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
  * Auto-wire the BeanFactory so it is available in the service
  */
-public class Example2bis {
+public class Example10 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Entity { }
 

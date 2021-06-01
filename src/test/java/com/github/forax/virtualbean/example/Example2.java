@@ -1,37 +1,31 @@
 package com.github.forax.virtualbean.example;
 
 import com.github.forax.virtualbean.BeanFactory;
-import com.github.forax.virtualbean.BeanFactory.Advice;
-import com.github.forax.virtualbean.Metadata;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
+import java.lang.invoke.MethodType;
+import java.util.Objects;
+
+import static com.github.forax.virtualbean.BeanFactory.Interceptor.Kind.POST;
 
 /**
- * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
+ * Implement an annotation ParametersNonNull that checks if the parameters are null
+ * Same behavior as Example.java but uses an interceptor instead of an advice
+ * which is a little more complex to use but more efficient.
  */
 public class Example2 {
   @Retention(RetentionPolicy.RUNTIME)
-  @interface Entity { }
+  @interface ParametersNonNull { }
 
-  @Retention(RetentionPolicy.RUNTIME)
-  @interface Transactional { }
-
-  private static final ThreadLocal<EntityManager> ENTITY_MANAGERS = new ThreadLocal<>();
-
-  record EntityManager(Set<Object> dirtySet) {
-    public static EntityManager current() {
-      return ENTITY_MANAGERS.get();
-    }
-
-    public void update() {
-      System.out.println("dirtySet " + dirtySet);
-      dirtySet.clear();
+  private static final MethodHandle REQUIRE_NON_NULL;
+  static {
+    try {
+      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class, "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new AssertionError(e);
     }
   }
 
@@ -39,55 +33,35 @@ public class Example2 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
-      @Override
-      public void pre(Method method, Object bean, Object[] args) { }
-
-      @Override
-      public void post(Method method, Object bean, Object[] args) {
-        var entityManager = EntityManager.current();
-        if (entityManager != null) {
-          entityManager.dirtySet.add(bean);
+    beanFactory.registerInterceptor(ParametersNonNull.class, (kind, method, type) -> {
+      if (kind == POST) {
+        return null;
+      }
+      var parameterTypes = method.getParameterTypes();
+      var filters = new MethodHandle[parameterTypes.length];
+      for(var i = 0; i < parameterTypes.length; i++) {
+        var parameterType = parameterTypes[i];
+        if (parameterType.isPrimitive()) {
+          continue;
         }
+        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1, "argument " + i + " of " + method + " is null");
+        var filter = requireNonNull.asType(MethodType.methodType(parameterType, parameterType));
+        filters[i] = filter;
       }
-    });
-    beanFactory.registerAdvice(Transactional.class, new Advice() {
-      @Override
-      public void pre(Method method, Object bean, Object[] args) {
-        var dirtySet = Collections.newSetFromMap(new IdentityHashMap<>());
-        var entityManager = new EntityManager(dirtySet);
-        ENTITY_MANAGERS.set(entityManager);
-      }
-
-      @Override
-      public void post(Method method, Object bean, Object[] args) {
-        ENTITY_MANAGERS.remove();
-      }
+      var empty = MethodHandles.empty(type);
+      return MethodHandles.filterArguments(empty, 1, filters);
     });
 
 
-    @Entity
-    interface UserBean {
-      String getName();
-      void setName(String name);
-      String getEmail();
-      void setEmail(String name);
-    }
-
-    interface UserManager {
-      @Transactional
-      default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-        var user = beanFactory.create(UserBean.class);
-        user.setName(name);
-        user.setEmail(email);
-
-        EntityManager.current().update();
-        return user;
+    interface HelloManager {
+      @ParametersNonNull
+      default void sayHello(String text)  {
+        System.out.println("hello " + text);
       }
     }
 
-    var userManager = beanFactory.create(UserManager.class);
-    var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
-    System.out.println("user " + user.getName() + " " + user.getEmail());
+    var helloManager = beanFactory.create(HelloManager.class);
+    helloManager.sayHello("Bob");
+    helloManager.sayHello(null);
   }
 }

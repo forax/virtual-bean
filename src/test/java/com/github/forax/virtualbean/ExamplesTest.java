@@ -1,8 +1,10 @@
 package com.github.forax.virtualbean;
 
 import com.github.forax.virtualbean.example.Example;
-import com.github.forax.virtualbean.example.Example2;
+import com.github.forax.virtualbean.example.Example10;
 import com.github.forax.virtualbean.example.Example3;
+import com.github.forax.virtualbean.example.Example9;
+import com.github.forax.virtualbean.example.Example2;
 import com.github.forax.virtualbean.example.Example4;
 import com.github.forax.virtualbean.example.Example5;
 import com.github.forax.virtualbean.example.Example6;
@@ -19,12 +21,12 @@ public class ExamplesTest {
 
   @Test
   public void example2() {
-    Example2.main(new String[0]);
+    Assertions.assertThrows(NullPointerException.class, () -> Example2.main(new String[0]));
   }
 
   @Test
   public void example3() {
-    Assertions.assertThrows(NullPointerException.class, () -> Example3.main(new String[0]));
+    Example3.main(new String[0]);
   }
 
   @Test
@@ -50,5 +52,15 @@ public class ExamplesTest {
   @Test
   public void example8() {
     Example8.main(new String[0]);
+  }
+
+  @Test
+  public void example9() {
+    Example9.main(new String[0]);
+  }
+
+  @Test
+  public void example10() {
+    Example10.main(new String[0]);
   }
 }

@@ -35,19 +35,30 @@ import static java.util.Objects.requireNonNull;
 /**
  * Class that creates and manages {@link Metadata virtual bean} instances.
  *
- * A bean factory
- * <ul>
- *   <li>is created with a {@link Lookup},
- *   <li>can {@link #registerInvocationHandler(Class, InvocationHandler)}  register} {@link InvocationHandler}s and/or
- *           {@link #registerImplementor(Class, Implementor)}} register} {@link Implementor}s
- *           to implement abstract {@link Metadata#services() services},
- *   <li>can {@link #registerAdvice(Class, Advice) register} {@link Advice}s and/or
- *           {@link #registerInterceptor(Class, Interceptor)} (Class, Advice) register} {@link Interceptor}s
- *           to execute code around {@link Metadata#services() services} and
- *           {@link Metadata#properties() properties} and
- *   <li>can {@link #create(Class) create} bean instances that will use the implementors previously registered
- *           and interceptors previously registered or registered in the future.
- * </ul>
+ * The method {@link #create(Class)} returns an instance of a class implementing
+ * the interface pass as a parameter. The methods can be {@link Implementor implemented}
+ * if abstract or {@link Interceptor intercepted} at runtime based on annotations.
+ *
+ * The implementation class is generated in the same package as the {@code lookupClass}
+ * of the {@link Lookup} object passed to the constructor. The generated classes also
+ * implement {@link #equals(Object)}, {@link #hashCode()} and {@link #toString()}.
+ *
+ * The method {@link #registerImplementor(Class, Implementor)} register a lambda for an annotation
+ *  that will be called to provide an implementation for the abstract method annotated by
+ * this annotation.
+ *
+ * The method {@link #registerInterceptor(Class, Predicate, Interceptor)} register a lambda for an annotation
+ * hat will be called to provide two method handles, one called before ({@link Interceptor.Kind#PRE})
+ * the method is called and one called after ({@link Interceptor.Kind#POST}) is called.
+ *
+ * This API also provides a higher level API so it is possible to register
+ * an {@link #registerInvocationHandler(Class, InvocationHandler) an invocation handler} or to register
+ * an {@link #registerAdvice(Class, Advice) advice} that will be called each time the method id called.
+ * Using an {@link InvocationHandler} or an {@link Advice} is less performant (no argument boxing)
+ * but provide an API easier to use that using method handles.
+ *
+ * {@link Interceptor}s can also be {@link #unregisterInterceptor(Class, Interceptor)}. This operation
+ * may have a high runtime cost because it will force the VM to potentially deoptimize JITed code.
  */
 public class BeanFactory {
   private static final MethodHandle BSM;

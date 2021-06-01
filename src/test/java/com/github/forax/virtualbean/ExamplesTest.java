@@ -1,5 +1,13 @@
 package com.github.forax.virtualbean;
 
+import com.github.forax.virtualbean.example.Example;
+import com.github.forax.virtualbean.example.Example2;
+import com.github.forax.virtualbean.example.Example3;
+import com.github.forax.virtualbean.example.Example4;
+import com.github.forax.virtualbean.example.Example5;
+import com.github.forax.virtualbean.example.Example6;
+import com.github.forax.virtualbean.example.Example7;
+import com.github.forax.virtualbean.example.Example8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

@@ -1,24 +1,34 @@
-package com.github.forax.virtualbean;
+package com.github.forax.virtualbean.example;
 
+import com.github.forax.virtualbean.BeanFactory;
 import com.github.forax.virtualbean.BeanFactory.Advice;
+import com.github.forax.virtualbean.Metadata;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
+ * Auto-wire the BeanFactory so it is available in the service
  */
-public class Example2 {
+public class Example2bis {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Entity { }
 
   @Retention(RetentionPolicy.RUNTIME)
   @interface Transactional { }
+
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Autowired { }
 
   private static final ThreadLocal<EntityManager> ENTITY_MANAGERS = new ThreadLocal<>();
 
@@ -37,6 +47,10 @@ public class Example2 {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
+    beanFactory.registerImplementor(Autowired.class, (method, type) -> {
+      var constant = MethodHandles.constant(BeanFactory.class, beanFactory);
+      return MethodHandles.dropArguments(constant, 0, type.parameterList());
+    });
     beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
       @Override
       public void pre(Method method, Object bean, Object[] args) { }
@@ -74,18 +88,21 @@ public class Example2 {
 
     interface UserManager {
       @Transactional
-      default UserBean createUser(BeanFactory beanFactory, String name, String email) {
-        var user = beanFactory.create(UserBean.class);
+      default UserBean createUser(String name, String email) {
+        var user = beanFactory().create(UserBean.class);
         user.setName(name);
         user.setEmail(email);
 
         EntityManager.current().update();
         return user;
       }
+
+      @Autowired
+      BeanFactory beanFactory();
     }
 
     var userManager = beanFactory.create(UserManager.class);
-    var user = userManager.createUser(beanFactory, "Duke", "duke@openjdk.java.net");
+    var user = userManager.createUser("Duke", "duke@openjdk.java.net");
     System.out.println("user " + user.getName() + " " + user.getEmail());
   }
 }

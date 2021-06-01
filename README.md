@@ -87,7 +87,7 @@ If you run this code, the last call to `sayHello` will throw a `NullPointExcepti
 It's not the most efficient code tho, mostly because for each call, arguments are boxed in an array.
 The example 3, below, explains how to alleviate that issue.
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example.java
 
 
 ## A dirty set example
@@ -185,7 +185,7 @@ and store the corresponding in the _dirty set_ of the entity manager and
   }
 ```
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example2.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example2.java
 
 
 ## All your parameter are belong to us (2)
@@ -252,7 +252,7 @@ will check that if a parameter is an object, the method handle corresponding to 
 
 The behavior of this code is identical, but it performs better because arguments are not boxed anymore.
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example3.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example3.java
 
 
 ## Dynamically add/remove an interceptor
@@ -303,4 +303,4 @@ Then we can register or unregister the logging interceptor
   }
 ```
 
-The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/Example4.java
+The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example4.java

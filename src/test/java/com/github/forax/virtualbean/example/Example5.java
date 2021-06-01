@@ -1,4 +1,6 @@
-package com.github.forax.virtualbean;
+package com.github.forax.virtualbean.example;
+
+import com.github.forax.virtualbean.BeanFactory;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

@@ -4,6 +4,7 @@ import com.github.forax.virtualbean.BeanFactory.Advice;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -15,39 +16,17 @@ import java.util.function.Supplier;
 
 /**
  * Tracks bean that are modified by storing them in a "dirty" set links to a transaction
+ * Auto-wire the BeanFactory so it is available in the service
  */
 public class Example2bis {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Entity { }
 
-  @Entity
-  interface UserBean {
-    String getName();
-    void setName(String name);
-    String getEmail();
-    void setEmail(String name);
-  }
-
   @Retention(RetentionPolicy.RUNTIME)
   @interface Transactional { }
 
   @Retention(RetentionPolicy.RUNTIME)
-  @interface Inject { }
-
-  interface UserManager {
-    @Transactional
-    default UserBean createUser(String name, String email) {
-      var user = beanFactory().create(UserBean.class);
-      user.setName(name);
-      user.setEmail(email);
-
-      EntityManager.current().update();
-      return user;
-    }
-
-    @Inject
-    BeanFactory beanFactory();
-  }
+  @interface Autowired { }
 
   private static final ThreadLocal<EntityManager> ENTITY_MANAGERS = new ThreadLocal<>();
 
@@ -62,23 +41,14 @@ public class Example2bis {
     }
   }
 
-  record Registry(Map<Class<?>, Supplier<?>> map) {
-    public <T> void register(Class<T> type, Supplier<? extends T> supplier) {
-      map.put(type, supplier);
-    }
-    public <T> T lookup(Class<T> type) {
-      return type.cast(map.get(type).get());
-    }
-  }
-
   public static void main(String[] args) {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
-    var registry = new Registry(new HashMap<>());
-    registry.register(BeanFactory.class, () -> beanFactory);
-    beanFactory.registerInvocationHandler(Inject.class, (method, bean, args1) -> registry.lookup(method.getReturnType()));
-
+    beanFactory.registerImplementor(Autowired.class, (method, type) -> {
+      var constant = MethodHandles.constant(BeanFactory.class, beanFactory);
+      return MethodHandles.dropArguments(constant, 0, type.parameterList());
+    });
     beanFactory.registerAdvice(Entity.class, Metadata::isSetter, new Advice() {
       @Override
       public void pre(Method method, Object bean, Object[] args) { }
@@ -105,6 +75,29 @@ public class Example2bis {
       }
     });
 
+
+    @Entity
+    interface UserBean {
+      String getName();
+      void setName(String name);
+      String getEmail();
+      void setEmail(String name);
+    }
+
+    interface UserManager {
+      @Transactional
+      default UserBean createUser(String name, String email) {
+        var user = beanFactory().create(UserBean.class);
+        user.setName(name);
+        user.setEmail(email);
+
+        EntityManager.current().update();
+        return user;
+      }
+
+      @Autowired
+      BeanFactory beanFactory();
+    }
 
     var userManager = beanFactory.create(UserManager.class);
     var user = userManager.createUser("Duke", "duke@openjdk.java.net");

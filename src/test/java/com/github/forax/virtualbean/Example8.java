@@ -13,7 +13,8 @@ public class Example8 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Timed {}
 
-  private static final ThreadLocal<ArrayDeque<Long>> TIMER = ThreadLocal.withInitial(ArrayDeque::new);
+  private static final ThreadLocal<ArrayDeque<Long>> TIMER =
+      ThreadLocal.withInitial(ArrayDeque::new);
 
   public static void main(String[] args) {
     var beanFactory = new BeanFactory(lookup());

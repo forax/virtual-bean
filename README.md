@@ -96,7 +96,7 @@ The example below, explains how to alleviate that issue.
 The full code is available here: https://github.com/forax/virtual-bean/blob/master/src/test/java/com/github/forax/virtualbean/example/Example.java
 
 
-## All your parameter are belong to us (2)
+## All your parameter are belong to us (the sequel)
 
 We can improve the efficiency of the code above by using an _interceptor_ instead of an _advice_.
 But this came at the price of having to figure out how the `java.lang.invoke` API really works.
@@ -164,8 +164,8 @@ The full code is available here: https://github.com/forax/virtual-bean/blob/mast
 
 ## Invocation handler and object injection
 
-A BeanFactory is also able to provide an implementation of abstract method by registering
-an _implementor_.
+A BeanFactory also provides implementations of abstract method by registering _implementors_.
+We can use that to implement dependency injection, of value or factory of values, supplier in Java.
 
 First we create an annotation `@Inject` and a registry able to register a supplier for an interface
 and call that supplier when asked for an instance of the interface.

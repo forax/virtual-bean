@@ -117,7 +117,8 @@ but we also create a method handle (a function pointer) on `Objects.requireNonNu
   private static final MethodHandle REQUIRE_NON_NULL;
   static {
     try {
-      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class, "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
+      REQUIRE_NON_NULL = MethodHandles.lookup().findStatic(Objects.class,
+          "requireNonNull", MethodType.methodType(Object.class, Object.class, String.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new AssertionError(e);
     }
@@ -142,7 +143,8 @@ will check that if a parameter is an object, the method handle corresponding to 
         if (parameterType.isPrimitive()) {
           continue;
         }
-        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1, "argument " + i + " of " + method + " is null");
+        var requireNonNull = MethodHandles.insertArguments(REQUIRE_NON_NULL, 1,
+            "argument " + i + " of " + method + " is null");
         var filter = requireNonNull.asType(MethodType.methodType(parameterType, parameterType));
         filters[i] = filter;
       }
@@ -197,7 +199,8 @@ the interface `Clock` is called.
     var beanFactory = new BeanFactory(lookup);
 
     var registry = new Registry();
-    beanFactory.registerInvocationHandler(Inject.class, (method, bean, args1) -> registry.lookup(method.getReturnType()));
+    beanFactory.registerInvocationHandler(Inject.class,
+        (method, bean, args1) -> registry.lookup(method.getReturnType()));
 
     interface Clock {
       @Inject

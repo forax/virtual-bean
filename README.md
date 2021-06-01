@@ -199,13 +199,13 @@ Here we register a supplier of `LocalTime` that will be called each time the met
 the interface `Clock` is called.
 
 ```java
-  public static void main(String[] args) {
+  public static void main(String[] arguments) {
     var lookup = MethodHandles.lookup();
     var beanFactory = new BeanFactory(lookup);
 
     var injector = new Injector();
     beanFactory.registerInvocationHandler(Inject.class
-        (method, bean, args1) -> injector.getInstance(method.getReturnType()));
+        (method, bean, args) -> injector.getInstance(method.getReturnType()));
 
     interface Clock {
       @Inject

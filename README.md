@@ -13,7 +13,7 @@ This class offers capabilities similar to Spring, CDI or Guice but
 decomposes the concept of interceptor into 2 different parts:
 _interceptors_ that can be composed and _implementors_ that are unique (thus non composable) to an abstract method.
 In order to be composable, interceptors are less powerful than classical interceptors,
-they return {@code void}, they can not change the arguments or the return value of a call, and
+they return **void**, they can not change the arguments or the return value of a call, and
 do not explicitly call each others.
 
 Conceptually, there are only three operations:

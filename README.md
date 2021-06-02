@@ -27,7 +27,7 @@ Conceptually, there are only three operations:
    by the annotation
   
 - `registerInterceptor(annotation, filter, interceptor)` that register a lambda that
-   will be called to get method handle that should run before (**PRE**) and ater (**POST**)
+   will be called to get method handle that should run before (**PRE**) and after (**POST**)
    a method call.
   
 There are several helper methods that allows to register `InvocationHandler`s and `Advice`s

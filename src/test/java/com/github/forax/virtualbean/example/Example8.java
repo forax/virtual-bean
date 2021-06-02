@@ -10,6 +10,9 @@ import java.util.ArrayDeque;
 
 import static java.lang.invoke.MethodHandles.lookup;
 
+/**
+ * Implement an annotation @Timed that prints the execution time of a method
+ */
 public class Example8 {
   @Retention(RetentionPolicy.RUNTIME)
   @interface Timed {}

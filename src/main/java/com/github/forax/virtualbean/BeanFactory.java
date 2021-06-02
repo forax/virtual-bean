@@ -62,7 +62,7 @@ import static java.util.Objects.requireNonNull;
  * This API also provides a higher level API so it is possible to register
  * an {@link #registerInvocationHandler(Class, InvocationHandler) an invocation handler} or to register
  * an {@link #registerAdvice(Class, Advice) advice} that will be called each time the method id called.
- * Using an {@link InvocationHandler} or an {@link Advice} is less performant (no argument boxing)
+ * Using an {@link InvocationHandler} or an {@link Advice} is less performant (mostly argument boxing)
  * but provide an API easier to use that using method handles.
  *
  * {@link Interceptor}s can also be {@link #unregisterInterceptor(Class, Interceptor)}. This operation

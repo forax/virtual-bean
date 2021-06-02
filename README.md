@@ -11,10 +11,12 @@ interceptors.
 
 This class offers capabilities similar to Spring, CDI or Guice but
 decomposes the concept of interceptor into 2 different parts:
-_interceptors_ that can be composed and _implementors_ that are unique (thus non composable) to an abstract method.
+_interceptors_ that can be composed and _implementors_ that are unique for an abstract method (thus non composable).
 In order to be composable, interceptors are less powerful than classical interceptors,
 they return **void**, they can not change the arguments or the return value of a call, and
 do not explicitly call each others.
+Unlike Spring or CDI, there is no annotations with a predefined semantics, the semantics of an annotation
+is fully defined by the code of the implementors and interceptors registered.
 
 Conceptually, there are only three operations:
 - `create(interface)` takes a virtual bean (the interface) and returns an instance
@@ -30,17 +32,17 @@ Conceptually, there are only three operations:
   
 There are several helper methods that allows to register `InvocationHandler`s and `Advice`s
 instead of respectively `Implementors` and `Interceptor` that have an easier semantics
-but are less performant because their API requires parameters to be boxed in an array.
+but are less performant because their API requires method arguments to be boxed in an array.
 
-Also _interceptors_ can be unregistered using `unregisterInterceptor(annotation, interceptor)`
-allowing to dynamically add/remove pre and post snippet of codes.
+Also interceptors can be unregistered using `unregisterInterceptor(annotation, interceptor)`
+allowing to dynamically add/remove pre and post code.
 
 The beauty of all of this is that the clean separation between
-the virtual bean, _implementors_ and _interceptors_ does not hinder performance,
+the virtual bean, implementors and interceptors does not hinder performance,
 but actually helps
 - the implementation is fully lazy, if a method of the virtual bean is never
   called the runtime cost is zero
-- _implementors_, _invocation handlers_, _interceptors_ and _advices_ are resolved once per call  
+- implementors, invocation handlers, interceptors and advices are resolved once per call  
   and fully inlined
 - if there are several interceptors for a call, there are called one after the
   other, and not one on top of the others, so no gigantic stracktraces

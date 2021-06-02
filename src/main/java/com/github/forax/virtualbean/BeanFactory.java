@@ -82,16 +82,16 @@ public class BeanFactory {
 
   /**
    * An implementor is a functional interface that is called to provide an implementation
-   * for one or more abstract services.
+   * for one or more abstract methods.
    */
   @FunctionalInterface
   public interface Implementor {
     /**
-     * Returns a method containing the implementation of an abstract method.
+     * Returns a method handle referencing the implementation of an abstract method.
      *
-     * @param method an abstract method to implement
+     * @param method hte abstract method to implement
      * @param type the method type of the method handle to return
-     * @return a method handle is will be used as implementation of the abstract method
+     * @return a method handle that will be used as implementation of the abstract method
      */
     MethodHandle implement(Method method, MethodType type);
   }
@@ -110,7 +110,7 @@ public class BeanFactory {
   }
 
   /**
-   * A functional interface calls each time one or more abstract services are called.
+   * A functional interface calls each time one or more abstract method are called.
    */
   @FunctionalInterface
   public interface InvocationHandler {
@@ -129,8 +129,8 @@ public class BeanFactory {
     /**
      * Convert the invocation handler into an implementor.
      *
-     * @return a new implementation that will call the invocation handler each
-     *         time the abstract service is called.
+     * @return a new implementor that will call the invocation handler each
+     *         time the abstract method is called.
      */
     default Implementor asImplementor() {
       return (method, type) ->
@@ -278,19 +278,20 @@ public class BeanFactory {
   }
 
   /**
-   * Register an invocation handler for a peculiar annotation.
-   * The invocation handler will be called each time an abstract service annotated by
-   * an annotation of type annotation type is called.
+   * Register an invocation handler that will be called on all abstract methods that either have their declaring
+   * class annotated by the annotation or the method annotated by the annotation.
+   * The invocation handler will be called each time the abstract method is called.
    *
    * This call is semantically equivalent to
    * <pre>
    *   registerImplementor(annotationType, invocationHandler.asImplementor())
    * </pre>
    *
-   * @param annotationType the type of the annotation
-   * @param invocationHandler the invocation handler to call each time an abstract service is called.
+   * @param annotationType the type of the annotations
+   * @param invocationHandler the invocation handler to call each time an abstract method is called.
    * @throws IllegalStateException if there is already an invocation handler or an implementor
    *         registered for that annotation type
+   * @see #registerImplementor(Class, Implementor) 
    */
   public void registerInvocationHandler(Class<? extends Annotation> annotationType, InvocationHandler invocationHandler) {
     requireNonNull(annotationType);
@@ -299,9 +300,10 @@ public class BeanFactory {
   }
 
   /**
-   * Register an implementor for a peculiar annotation.
-   * The implementor will be called once per abstract service call to return the method handle that will
-   * be called for any subsequent call of the abstract service.
+   * Register an implementor that will be called on all abstract methods that either have their declaring
+   * class annotated by the annotation or the method annotated by the annotation.
+   * The implementor will be called once the first time the abstract method is called,
+   * the method handle returned by the implementor will be used as implementation of the abstract method.
    *
    * @param annotationType the type of the annotation
    * @param implementor the implementor to call
@@ -320,7 +322,7 @@ public class BeanFactory {
 
   /**
    * Register an advice that will be called on all methods that either have their declaring class
-   * annotated by the annotation, the method annotated by the annotation of one of the parameter or
+   * annotated by the annotation, the method annotated by the annotation or one of the parameter or
    * return value annotated by the annotation. Annotations on types are not considered.
    *
    * This call is semantically equivalent to

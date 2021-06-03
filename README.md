@@ -173,11 +173,11 @@ The full code is available here: https://github.com/forax/virtual-bean/blob/mast
 
 ## Invocation handler and object injection
 
-A BeanFactory also provides implementations of abstract method by registering _implementors_.
+A `BeanFactory` also provides implementations of abstract method by registering _implementors_.
 We can use that to implement a simple dependency injection.
 
-First we create an annotation `@Inject` and an injector that provide a way to bind a supplier
-of a type to that type
+First we create an annotation `@Inject` and a class `Injector` that associate a class to a supplier
+of instances of that class.
 ```java
   @Retention(RetentionPolicy.RUNTIME)
   @interface Inject { }
@@ -194,11 +194,10 @@ of a type to that type
   }
 ```
 
-The parameter types (the `T`) are only here to ensure that the type of the supplier is a subtype of the type to bind.
-Then we register an _invocation handler_ that will be called when the abstract method annotated by `Inject` is called.`
+Then we register an _invocation handler_ that will be called when abstract methods annotated by `Inject` is called.`
 
-Here we register a supplier of `LocalTime` that will be called each time the methode `now()` of
-the interface `Clock` is called.
+In this example, each time the method `Clock.current()` is called, the _invocation_handler_ asks
+the injector to supply an instance of `LocalTime`, calling `LocalTime.now()`.
 
 ```java
   public static void main(String[] arguments) {
@@ -211,13 +210,13 @@ the interface `Clock` is called.
 
     interface Clock {
       @Inject
-      LocalTime now();
+      LocalTime current();
     }
 
     var clock = beanFactory.create(Clock.class);
     injector.bind(LocalTime.class, LocalTime::now);
-    System.out.println(clock.now());
-    System.out.println(clock.now());
+    System.out.println(clock.current());
+    System.out.println(clock.current());
   }
 ```
 
@@ -226,12 +225,12 @@ The full code is available here: https://github.com/forax/virtual-bean/blob/mast
 
 ## Dynamically add/remove an interceptor
 
-The class `BeanFactory` provides the capability to not only add an interceptor
-but also to remove it dynamically. In that case, all codes optimized by the VM
-will be trashed, and all the calls will be re-optimized later.
+The class `BeanFactory` API allows not only to add interceptors but also to remove them dynamically.
+In that case, all method calls optimized by the VM using an interceptor will be trashed, and will be re-optimize
+later with the new interceptors when the JIT will kick in again.
 
-We define an annotation `Log` and a virtual bean `HelloManager` using
-that annotation.
+Here, we define an annotation `Log` that will log all calls of methods annotated with that annotation,
+and a virtual bean `HelloManager` with a method `sayHello` annotated with `@Log`.
 
 ```java
   @Retention(RetentionPolicy.RUNTIME)
@@ -245,7 +244,7 @@ that annotation.
   }
 ```
 
-Then we can register or unregister the logging interceptor
+The `main` shows an example of registering and then unregistering the logging interceptor
 ```java
   public static void main(String[] args) {
     var lookup = MethodHandles.lookup();

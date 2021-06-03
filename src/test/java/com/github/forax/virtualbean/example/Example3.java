@@ -40,12 +40,12 @@ public class Example3 {
 
     interface Clock {
       @Inject
-      LocalTime now();
+      LocalTime current();
     }
 
     var clock = beanFactory.create(Clock.class);
     injector.bind(LocalTime.class, LocalTime::now);
-    System.out.println(clock.now());
-    System.out.println(clock.now());
+    System.out.println(clock.current());
+    System.out.println(clock.current());
   }
 }

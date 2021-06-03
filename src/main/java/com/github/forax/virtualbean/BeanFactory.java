@@ -69,7 +69,7 @@ import static java.util.Objects.requireNonNull;
  * {@link Interceptor}s can also be {@link #unregisterInterceptor(Class, Interceptor)}. This operation
  * may have a high runtime cost because it will force the VM to potentially deoptimize JITed code.
  *
- * This class is thread-safe. The implementors and interceptors are resolved lazily when
+ * This class is thread-safe. Implementors and interceptors are resolved lazily when
  * a method is called, so the resolution will depend on the state of the bean factory at that time,
  * not the state of the bean factory when the implementors or interceptors were registered.
  */

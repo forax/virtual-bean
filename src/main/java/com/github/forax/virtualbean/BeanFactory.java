@@ -21,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -67,6 +68,10 @@ import static java.util.Objects.requireNonNull;
  *
  * {@link Interceptor}s can also be {@link #unregisterInterceptor(Class, Interceptor)}. This operation
  * may have a high runtime cost because it will force the VM to potentially deoptimize JITed code.
+ *
+ * This class is thread-safe. The implementors and interceptors are resolved lazily when
+ * a method is called, so the resolution will depend on the state of the bean factory at that time,
+ * not the state of the bean factory when the implementors or interceptors were registered.
  */
 public class BeanFactory {
   private static final MethodHandle BSM;
@@ -259,11 +264,10 @@ public class BeanFactory {
   private record InterceptorData(Predicate<Method> methodFilter, Interceptor interceptor) { }
 
   private final Lookup lookup;
-  private final Object switchPointLock = new Object();
   private SwitchPoint switchPoint;
   private final HashMap<Class<?>, Implementor> implementorMap = new HashMap<>();
   private final HashMap<Class<?>, List<InterceptorData>> interceptorMap = new HashMap<>();
-  private final HashMap<Class<?>, MethodHandle> beanFactoryMap = new HashMap<>();
+  private final ConcurrentHashMap<Class<?>, MethodHandle> beanFactoryMap = new ConcurrentHashMap<>();
 
   /**
    * Creates a registry with a lookup, all proxies created by this registry will use that lookup,
@@ -272,7 +276,7 @@ public class BeanFactory {
    */
   public BeanFactory(Lookup lookup) {
     this.lookup = requireNonNull(lookup);
-    synchronized (switchPointLock) {
+    synchronized (interceptorMap) {
       switchPoint = new SwitchPoint();
     }
   }
@@ -314,8 +318,11 @@ public class BeanFactory {
     requireNonNull(annotationType);
     requireNonNull(implementor);
     checkAnnotationType(annotationType);
-    var result = implementorMap.put(annotationType, implementor);
-    if (result != null) {
+    Implementor oldImplementor ;
+    synchronized (implementorMap) {
+      oldImplementor = implementorMap.putIfAbsent(annotationType, implementor);
+    }
+    if (oldImplementor != null) {
       throw new IllegalStateException("There already an existing implementor for " + annotationType.getName());
     }
   }
@@ -396,8 +403,10 @@ public class BeanFactory {
     requireNonNull(methodFilter);
     requireNonNull(interceptor);
     checkAnnotationType(annotationType);
-    interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(methodFilter, interceptor));
-    invalidateSwitchPoint();
+    synchronized (interceptorMap) {
+      interceptorMap.computeIfAbsent(annotationType, __ -> new ArrayList<>()).add(new InterceptorData(methodFilter, interceptor));
+      invalidateSwitchPoint();
+    }
   }
 
   /**
@@ -426,28 +435,31 @@ public class BeanFactory {
   public void unregisterInterceptor(Class<? extends Annotation> annotationType, Interceptor interceptor) {
     Objects.requireNonNull(annotationType);
     Objects.requireNonNull(interceptor);
-    interceptorMap.compute(annotationType, (__, interceptorDataList) -> {
-      if (interceptorDataList == null) {
-        throw new IllegalStateException("no interceptor registered for annotation " + annotationType);
-      }
-      boolean modified = interceptorDataList.removeIf(interceptorData -> interceptorData.interceptor.equals(interceptor));
-      if (!modified) {
-        throw new IllegalStateException("no interceptor " + interceptor + " is registered for annotation " + annotationType);
-      }
-      invalidateSwitchPoint();
-      return interceptorDataList.isEmpty()? null: interceptorDataList;
-    });
+    synchronized (interceptorMap) {
+      interceptorMap.compute(annotationType, (__, interceptorDataList) -> {
+        if (interceptorDataList == null) {
+          throw new IllegalStateException("no interceptor registered for annotation " + annotationType);
+        }
+        boolean modified = interceptorDataList.removeIf(interceptorData -> interceptorData.interceptor.equals(interceptor));
+        if (!modified) {
+          throw new IllegalStateException("no interceptor " + interceptor + " is registered for annotation " + annotationType);
+        }
+        invalidateSwitchPoint();
+        return interceptorDataList.isEmpty() ? null : interceptorDataList;
+      });
+    }
   }
 
-  private Stream<InterceptorData> getInterceptorDataStream(Class<?> annotationClass) {
-    return interceptorMap.getOrDefault(annotationClass, List.of()).stream();
+  private List<InterceptorData> getInterceptorDataList(Class<?> annotationClass) {
+    synchronized (interceptorMap) {
+      return List.copyOf(interceptorMap.getOrDefault(annotationClass, List.of()));
+    }
   }
 
   private void invalidateSwitchPoint() {
-    synchronized (switchPointLock) {
-      SwitchPoint.invalidateAll(new SwitchPoint[] { switchPoint });
-      switchPoint = new SwitchPoint();
-    }
+    assert Thread.holdsLock(interceptorMap);
+    SwitchPoint.invalidateAll(new SwitchPoint[] { switchPoint });
+    switchPoint = new SwitchPoint();
   }
 
   /**
@@ -494,7 +506,7 @@ public class BeanFactory {
       var fallback = MethodHandles.foldArguments(invoker, INVALIDATE.bindTo(this));
 
       SwitchPoint switchPoint;
-      synchronized (switchPointLock) {
+      synchronized (interceptorMap) {
         switchPoint = BeanFactory.this.switchPoint;
       }
       return switchPoint.guardWithTest(target, fallback);
@@ -522,8 +534,10 @@ public class BeanFactory {
     return flattenInterceptors(interceptors, method, kind, type);
   }
 
-  private Stream<Implementor> getImplementorStream(Class<?> annotationClass) {
-    return Stream.ofNullable(implementorMap.get(annotationClass));
+  private Implementor getImplementor(Class<?> annotationClass) {
+    synchronized (implementorMap) {
+      return implementorMap.get(annotationClass);
+    }
   }
 
   /**
@@ -604,13 +618,13 @@ public class BeanFactory {
   }
 
   private Stream<Implementor> implementorStream(Stream<Annotation> annotations) {
-    return annotations.flatMap(annotation -> getImplementorStream(annotation.annotationType()));
+    return annotations.flatMap(annotation -> Stream.ofNullable(getImplementor(annotation.annotationType())));
   }
 
   private Stream<Interceptor> interceptorStream(Stream<Annotation> annotations, Method method) {
     return annotations
         .flatMap(annotation ->
-            getInterceptorDataStream(annotation.annotationType())
+            getInterceptorDataList(annotation.annotationType()).stream()
                 .filter(interceptorData -> interceptorData.methodFilter.test(method))
                 .map(InterceptorData::interceptor)
         );
@@ -667,6 +681,12 @@ public class BeanFactory {
   }
 
   private MethodHandle beanFactory(Class<?> type) {
-    return beanFactoryMap.computeIfAbsent(type, t -> ProxyGenerator.createProxyFactory(lookup, t, BSM.bindTo(this)));
+    var mh = beanFactoryMap.get(type);
+    if (mh != null) {
+      return mh;
+    }
+    mh = ProxyGenerator.createProxyFactory(lookup, type, BSM.bindTo(this));
+    var otherMH = beanFactoryMap.putIfAbsent(type, mh);
+    return otherMH != null? otherMH: mh;
   }
 }

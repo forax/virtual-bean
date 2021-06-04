@@ -2,6 +2,7 @@ package com.github.forax.virtualbean;
 
 import com.github.forax.virtualbean.example.Example;
 import com.github.forax.virtualbean.example.Example10;
+import com.github.forax.virtualbean.example.Example11;
 import com.github.forax.virtualbean.example.Example3;
 import com.github.forax.virtualbean.example.Example9;
 import com.github.forax.virtualbean.example.Example2;
@@ -62,5 +63,10 @@ public class ExamplesTest {
   @Test
   public void example10() {
     Example10.main(new String[0]);
+  }
+
+  @Test
+  public void example11() {
+    Assertions.assertThrows(IllegalArgumentException.class, () -> Example11.main(new String[0]));
   }
 }

@@ -35,11 +35,11 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * Class that creates and manages {@link Metadata virtual bean} instances.
- *
+ * <p>
  * The method {@link #create(Class)} returns an instance of a class implementing
  * the interface pass as a parameter. The methods can be {@link Implementor implemented}
  * if abstract or {@link Interceptor intercepted} at runtime based on annotations.
- *
+ * <p>
  * This class offers capabilities similar to Spring, CDI or Guice but
  * decomposes the concept of interceptor into 2 different parts:
  * _interceptors_ that can be composed and implementors that are unique (thus non composable) to an abstract method.
@@ -47,28 +47,28 @@ import static java.util.Objects.requireNonNull;
  * they return {@code void}, they can not change the arguments or the return value of a call, and
  * do not explicitly calls each others, there are not chained but are called one after the other
  * (thus no long stacktraces).
- *
+ * <p>
  * The implementation class is generated in the same package as the {@code lookupClass}
  * of the {@link Lookup} object passed to the constructor. The generated classes also
  * implement {@link #equals(Object)}, {@link #hashCode()} and {@link #toString()}.
- *
+ * <p>
  * The method {@link #registerImplementor(Class, Implementor)} register a lambda for an annotation
  *  that will be called to provide an implementation for the abstract method annotated by
  * this annotation.
- *
+ * <p>
  * The method {@link #registerInterceptor(Class, Predicate, Interceptor)} register a lambda for an annotation
  * hat will be called to provide two method handles, one called before ({@link Interceptor.Kind#PRE})
  * the method is called and one called after ({@link Interceptor.Kind#POST}) is called.
- *
+ * <p>
  * This API also provides a higher level API so it is possible to register
  * an {@link #registerInvocationHandler(Class, InvocationHandler) an invocation handler} or to register
  * an {@link #registerAdvice(Class, Advice) advice} that will be called each time the method id called.
  * Using an {@link InvocationHandler} or an {@link Advice} is less performant (mostly argument boxing)
  * but provide an API easier to use that using method handles.
- *
+ * <p>
  * {@link Interceptor}s can also be {@link #unregisterInterceptor(Class, Interceptor)}. This operation
  * may have a high runtime cost because it will force the VM to potentially deoptimize JITed code.
- *
+ * <p>
  * This class is thread-safe. Implementors and interceptors are resolved lazily when
  * a method is called, so the resolution will depend on the state of the bean factory at that time,
  * not the state of the bean factory when the implementors or interceptors were registered.
@@ -175,12 +175,12 @@ public class BeanFactory {
     /**
      * Returns a method handle that will be called before (@link Kind#pre) or
      * after {@link Kind#POST} a method.
-     *
+     * <p>
      * The returned method handle should have the same {@link MethodHandle#type() method type} as
      * the method type pass as argument. The method type return type is always {@code void},
      * the first parameter type is always {@code Object}, the following parameter types are
      * the same as the intercepted method parameter types.
-     *
+     * <p>
      * An interceptor can be {@link BeanFactory#unregisterInterceptor(Class, Interceptor) unregistered},
      * in that case the method handles of the other interceptors may be lost, in that case,
      * this method may be called again to re-create the lost method handles.
@@ -214,7 +214,7 @@ public class BeanFactory {
 
   /**
    * An advice defines two methods that will be called around an intercepted method.
-   *
+   * <p>
    * This interface is easier to use that the {@link Interceptor} interface but
    * because it requires to boxed all arguments of the intercepted method calls,
    * using an advice is less performant than using an interceptor.
@@ -285,7 +285,7 @@ public class BeanFactory {
    * Register an invocation handler that will be called on all abstract methods that either have their declaring
    * class annotated by the annotation or the method annotated by the annotation.
    * The invocation handler will be called each time the abstract method is called.
-   *
+   * <p>
    * This call is semantically equivalent to
    * <pre>
    *   registerImplementor(annotationType, invocationHandler.asImplementor())
@@ -331,7 +331,7 @@ public class BeanFactory {
    * Register an advice that will be called on all methods that either have their declaring class
    * annotated by the annotation, the method annotated by the annotation or one of the parameter or
    * return value annotated by the annotation. Annotations on types are not considered.
-   *
+   * <p>
    * This call is semantically equivalent to
    * <pre>
    *   registerAdvice(annotationType, __ -> true, advice)
@@ -350,7 +350,7 @@ public class BeanFactory {
    * Register an advice that will be called on all methods that either have their declaring class
    * annotated by the annotation, the method annotated by the annotation of one of the parameter or
    * return value annotated by the annotation. Annotations on types are not considered.
-   *
+   * <p>
    * This call is semantically equivalent to
    * <pre>
    *   registerInterceptor(annotationType, methodFilter, advice.asInterceptor())
@@ -372,7 +372,7 @@ public class BeanFactory {
    * Register an interceptor that will be called that either have their declaring class
    * annotated by the annotation, the method annotated by the annotation of one of the parameter or
    * return value annotated by the annotation. Annotations on types are not considered.
-   *
+   * <p>
    * This call is semantically equivalent to
    * <pre>
    *   registerInterceptor(annotationType, __ -> true, interceptor)

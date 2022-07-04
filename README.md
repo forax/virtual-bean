@@ -5,7 +5,7 @@ A virtual bean is an interface that describes
 - _properties_ as getters and setters
 - _services_ as abstract or default methods
 
-The `BeanFactory` API ([javadoc](https://jitpack.io/com/github/forax/virtual-bean/1.0/javadoc/))
+The `BeanFactory` API ([javadoc](https://jitpack.io/com/github/forax/virtual-bean/master-SNAPSHOT/javadoc/))
 cleanly decouples the virtual bean definition,  from the semantics  of the annotation defined in terms
 of implementors and interceptors.
 

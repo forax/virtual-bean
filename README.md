@@ -47,7 +47,39 @@ but actually helps
 - if there are several interceptors for a call, there are called one after the
   other, and not one on top of the others, so no gigantic stracktraces
 
-Enough talk, let see some examples.  
+There are some examples below.  
+
+## How to use it [![](https://jitpack.io/v/forax/virtual-bean.svg)](https://jitpack.io/#forax/beautiful_logger)
+
+Get the latest binary distribution via [JitPack](https://jitpack.io/#forax/virtual-bean)
+
+### Maven
+
+```xml
+  <repositories>
+      <repository>
+          <id>jitpack.io</id>
+          <url>https://jitpack.io</url>
+      </repository>
+  </repositories>
+  <dependency>
+      <groupId>com.github.forax</groupId>
+      <artifactId>virtual-bean</artifactId>
+      <version>1.0</version>
+  </dependency>
+```
+
+### Gradle
+
+```gradle
+  repositories {
+      ...
+      maven { url 'https://jitpack.io' }
+  }
+  dependencies {
+      compile 'com.github.forax:virtual-bean:1.0'
+  }
+```
 
 
 ## All your parameter are belong to us

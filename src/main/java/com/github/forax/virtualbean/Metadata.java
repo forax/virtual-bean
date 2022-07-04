@@ -19,7 +19,7 @@ import static java.lang.invoke.MethodType.methodType;
 
 /**
  * The metadata describing a virtual bean.
- *
+ * <p>
  * A virtual bean is an interface with
  * <ul>
  *   <li>properties define as pairs of abstract getter and setter,
@@ -51,7 +51,7 @@ public record Metadata(Table<Property> properties, Table<Service> services) {
   /**
    * An unmodifiable specialized {@link Map} with keys being [@code String} and
    * with the entries being ordered (see {@link #values()}).
-   *
+   * <p>
    * This interface is used to store {@link Metadata metadata} properties and services.
    *
    * @param <V> type of the value
@@ -100,13 +100,14 @@ public record Metadata(Table<Property> properties, Table<Service> services) {
     private final Object[] entries;
 
     private TableImpl(int capacity) {
-      indexes = new int[capacity << 1];
+      var powerOfTwo = Integer.highestOneBit(capacity) << 1;
+      indexes = new int[powerOfTwo << 1];
       entries = new Object[capacity << 1];
     }
 
     @Override
     public int size() {
-      return indexes.length >> 1;
+      return entries.length >> 1;
     }
 
     @Override

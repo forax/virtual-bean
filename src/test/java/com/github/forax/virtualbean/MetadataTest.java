@@ -2,6 +2,7 @@ package com.github.forax.virtualbean;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -26,6 +27,28 @@ public class MetadataTest {
       int getAge();
       void setAge(int age);
     }
+    var metadata = Metadata.of(Entity.class);
+    assertNotNull(metadata);
+  }
+  @Test
+  public void ofVirtualEntityPropertyCountNotAPowerOfTwo() {
+    interface Entity {
+      int getAge();
+      void setAge(int age);
+
+      String getName();
+      void setName(String name);
+
+      LocalDate getDob();
+      void setDob(LocalDate dob);
+
+      String getAddress();
+      void setAddress(String address);
+
+      char getSex();
+      void setSex(char sex);
+    }
+
     var metadata = Metadata.of(Entity.class);
     assertNotNull(metadata);
   }

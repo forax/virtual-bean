@@ -16,7 +16,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="virtual-bean" target="16" />
+      <module name="virtual-bean" target="17" />
     </bytecodeTargetLevel>
   </component>
 </project>
